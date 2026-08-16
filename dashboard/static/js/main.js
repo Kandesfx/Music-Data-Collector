@@ -2244,21 +2244,41 @@ const btnConfirmCancel = document.getElementById("btn-confirm-cancel");
 const btnConfirmProceed = document.getElementById("btn-confirm-proceed");
 let confirmModalCallback = null;
 
-function showConfirmModal({ title = "⚠️ Xác Nhận Thao Tác", message, proceedText = "Xác Nhận Xóa", isDanger = true, onConfirm }) {
+function showConfirmModal(opts, legacyCallback) {
+  let title = "⚠️ Xác Nhận Thao Tác Dữ Liệu";
+  let message = "Bạn có chắc chắn muốn thực hiện thao tác này?";
+  let proceedText = "Xác Nhận Xóa";
+  let isDanger = true;
+  let onConfirm = null;
+
+  if (typeof opts === "string") {
+    message = opts;
+    onConfirm = legacyCallback;
+  } else if (typeof opts === "object" && opts !== null) {
+    title = opts.title || title;
+    message = opts.message || message;
+    proceedText = opts.proceedText || proceedText;
+    isDanger = opts.isDanger !== undefined ? opts.isDanger : true;
+    onConfirm = opts.onConfirm;
+  }
+
   if (!confirmModal) {
     if (window.confirm(message.replace(/<[^>]*>?/gm, ''))) {
       if (typeof onConfirm === "function") onConfirm();
     }
     return;
   }
+
   if (confirmModalMessage) confirmModalMessage.innerHTML = message;
   if (btnConfirmProceed) {
     btnConfirmProceed.textContent = proceedText;
     btnConfirmProceed.className = isDanger ? "btn btn-danger" : "btn btn-primary";
   }
   confirmModalCallback = onConfirm;
+  confirmModal.style.zIndex = "1000000";
   confirmModal.style.display = "flex";
 }
+window.showConfirmModal = showConfirmModal;
 
 if (btnCloseConfirmModal) btnCloseConfirmModal.addEventListener("click", () => (confirmModal.style.display = "none"));
 if (btnConfirmCancel) btnConfirmCancel.addEventListener("click", () => (confirmModal.style.display = "none"));

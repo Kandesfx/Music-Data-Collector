@@ -1579,10 +1579,10 @@
     </div>
   </div>
 
-  <!-- Modal 9: General Confirmation Dialog -->
-  <div id="confirm-modal" class="modal-overlay" style="z-index: 1050;">
-    <div class="modal-container" style="max-width: 440px;">
-      <div class="modal-header">
+  <!-- Modal 9: General Confirmation Dialog (Top-level z-index) -->
+  <div id="confirm-modal" class="modal-overlay" style="z-index: 1000000;">
+    <div class="modal-container" style="max-width: 460px; border: 1px solid rgba(239, 68, 68, 0.4); box-shadow: 0 25px 60px rgba(0,0,0,0.85);">
+      <div class="modal-header" style="background: rgba(239, 68, 68, 0.1);">
         <div class="modal-title text-red">⚠️ Xác Nhận Thao Tác Dữ Liệu</div>
         <button id="btn-close-confirm-modal" class="modal-close">✕</button>
       </div>
@@ -1591,12 +1591,12 @@
           Bạn có chắc chắn muốn thực hiện thao tác này?
         </div>
         <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-md); padding: 8px 12px; font-size: 11.5px; color: #fca5a5;">
-          ⚠️ <b>Lưu ý an toàn:</b> Thao tác xóa sẽ đồng thời xóa vĩnh viễn dữ liệu trên MongoDB và file âm thanh MP3 / lời .lrc trên ổ đĩa.
+          ⚠️ <b>Lưu ý an toàn:</b> Thao tác xóa sẽ được thực thi ngay trên hệ thống máy chủ và không thể hoàn tác.
         </div>
       </div>
       <div class="modal-footer flex-row" style="justify-content: flex-end; gap: 8px;">
         <button id="btn-confirm-cancel" class="btn btn-secondary">Hủy Bỏ</button>
-        <button id="btn-confirm-proceed" class="btn btn-danger" style="background: var(--accent-red); border-color: var(--accent-red); color: white;">Xác Nhận Xóa</button>
+        <button id="btn-confirm-proceed" class="btn btn-danger" style="background: var(--accent-red); border-color: var(--accent-red); color: white; font-weight: 700;">Xác Nhận Xóa</button>
       </div>
     </div>
   </div>

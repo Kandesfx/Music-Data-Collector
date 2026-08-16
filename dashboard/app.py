@@ -1365,6 +1365,179 @@ def handle_check_cookie_status(data=None):
     emit("cookie_status_result", health_data)
 
 
+# ─── Spotify App Pool REST Endpoints ─────────────────────────
+
+@app.route("/api/spotify_apps", methods=["GET"])
+def list_spotify_apps():
+    """Retrieve all Spotify apps from MongoDB."""
+    apps = controller.db.get_all_spotify_apps()
+    return jsonify({"success": True, "apps": apps})
+
+
+@app.route("/api/spotify_apps", methods=["POST"])
+def save_spotify_app():
+    """Create or update a Spotify app in MongoDB."""
+    data = request.get_json() or {}
+    ok = controller.db.upsert_spotify_app(data)
+    if ok:
+        active_app = controller.db.get_active_spotify_app()
+        if active_app:
+            settings.SPOTIFY_CLIENT_ID = active_app.get("client_id", "")
+            settings.SPOTIFY_CLIENT_SECRET = active_app.get("client_secret", "")
+            settings.SPOTIFY_SP_DC = active_app.get("sp_dc", "")
+        return jsonify({"success": True, "app": data})
+    return jsonify({"success": False, "error": "Database error saving Spotify app"}), 500
+
+
+@app.route("/api/spotify_apps/<app_id>", methods=["DELETE"])
+def delete_spotify_app_endpoint(app_id):
+    """Delete a Spotify app from MongoDB."""
+    ok = controller.db.delete_spotify_app(app_id)
+    if ok:
+        controller.log(f"🗑️ Deleted Spotify app '{app_id}' from pool.", level="warning")
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Could not delete Spotify app"}), 404
+
+
+@app.route("/api/spotify_apps/<app_id>/set_active", methods=["POST"])
+def set_active_spotify_app_endpoint(app_id):
+    """Set Spotify app as primary active credential."""
+    ok = controller.db.set_active_spotify_app(app_id)
+    if ok:
+        active_app = controller.db.get_spotify_app(app_id)
+        if active_app:
+            settings.SPOTIFY_CLIENT_ID = active_app.get("client_id", "")
+            settings.SPOTIFY_CLIENT_SECRET = active_app.get("client_secret", "")
+            settings.SPOTIFY_SP_DC = active_app.get("sp_dc", "")
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Could not set active Spotify app"}), 400
+
+
+@app.route("/api/spotify_apps/<app_id>/test", methods=["POST"])
+def test_spotify_app_endpoint(app_id):
+    """Test Spotify app credentials and measure latency."""
+    app_doc = controller.db.get_spotify_app(app_id)
+    if not app_doc:
+        return jsonify({"success": False, "error": "App not found"}), 404
+
+    cid = app_doc.get("client_id", "").strip()
+    csec = app_doc.get("client_secret", "").strip()
+    is_premium = bool(app_doc.get("is_premium", False))
+
+    start_t = time.perf_counter()
+    try:
+        collector = SpotifyCollector(client_id=cid, client_secret=csec)
+        test_track = collector.get_track_metadata("4cOdK2wGLETKBW3PvgPWqT")
+        latency = int((time.perf_counter() - start_t) * 1000)
+        if test_track and test_track.get("name"):
+            acc_type = "👑 Spotify Premium (320k Direct)" if is_premium else "Developer API (Client Credentials)"
+            controller.db.update_spotify_app_status(
+                app_id=app_id,
+                status="valid",
+                is_premium=is_premium,
+                account_type=acc_type,
+                latency_ms=latency,
+            )
+            return jsonify({
+                "success": True,
+                "status": "valid",
+                "latency_ms": latency,
+                "is_premium": is_premium,
+                "account_type": acc_type,
+            })
+        else:
+            raise Exception("Spotify did not return track data.")
+    except Exception as ex:
+        latency = int((time.perf_counter() - start_t) * 1000)
+        err_msg = str(ex)
+        controller.db.update_spotify_app_status(
+            app_id=app_id,
+            status="invalid",
+            latency_ms=latency,
+            error=err_msg,
+        )
+        return jsonify({"success": False, "status": "invalid", "latency_ms": latency, "error": err_msg})
+
+
+# ─── Proxy Pool REST Endpoints ───────────────────────────────
+
+@app.route("/api/proxies", methods=["GET"])
+def list_proxies():
+    """Retrieve all proxies from MongoDB."""
+    proxies = controller.db.get_all_proxies()
+    return jsonify({"success": True, "proxies": proxies})
+
+
+@app.route("/api/proxies", methods=["POST"])
+def save_proxy():
+    """Create or update a proxy in MongoDB."""
+    data = request.get_json() or {}
+    ok = controller.db.upsert_proxy(data)
+    if ok:
+        controller.pm.sync_from_db()
+        return jsonify({"success": True, "proxy": data})
+    return jsonify({"success": False, "error": "Database error saving proxy"}), 500
+
+
+@app.route("/api/proxies/<proxy_id>", methods=["DELETE"])
+def delete_proxy_endpoint(proxy_id):
+    """Delete a proxy from MongoDB."""
+    ok = controller.db.delete_proxy(proxy_id)
+    if ok:
+        controller.pm.sync_from_db()
+        controller.log(f"🗑️ Deleted proxy '{proxy_id}' from pool.", level="warning")
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Could not delete proxy"}), 404
+
+
+@app.route("/api/proxies/<proxy_id>/toggle", methods=["POST"])
+def toggle_proxy_endpoint(proxy_id):
+    """Toggle proxy active state."""
+    data = request.get_json() or {}
+    is_active = bool(data.get("is_active", True))
+    ok = controller.db.toggle_proxy(proxy_id, is_active)
+    if ok:
+        controller.pm.sync_from_db()
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Could not toggle proxy"}), 400
+
+
+@app.route("/api/proxies/<proxy_id>/test", methods=["POST"])
+def test_single_proxy_endpoint(proxy_id):
+    """Test latency of a single proxy."""
+    p_doc = controller.db.get_proxy(proxy_id)
+    if not p_doc:
+        return jsonify({"success": False, "error": "Proxy not found"}), 404
+
+    url = p_doc.get("url")
+    result = ProxyManager.test_proxy_connection(url)
+    controller.db.update_proxy_status(
+        proxy_id=proxy_id,
+        status=result["status"],
+        latency_ms=result["latency_ms"],
+        error=result["error"],
+    )
+    return jsonify({"success": True, **result})
+
+
+@app.route("/api/proxies/test_all", methods=["POST"])
+def test_all_proxies_endpoint():
+    """Ping all proxies in the pool."""
+    all_p = controller.db.get_all_proxies()
+    results = []
+    for p in all_p:
+        res = ProxyManager.test_proxy_connection(p.get("url", ""))
+        controller.db.update_proxy_status(
+            proxy_id=p["id"],
+            status=res["status"],
+            latency_ms=res["latency_ms"],
+            error=res["error"],
+        )
+        results.append({"id": p["id"], **res})
+    controller.pm.sync_from_db()
+    return jsonify({"success": True, "results": results})
+
+
 # ─── Socket Events For Admin Management & Team Profiles ──────
 
 @socketio.on("admin_get_users")
