@@ -420,6 +420,24 @@ class DownloadManager:
         logger.info(f"✅ Successfully ingested direct URL track: {artist} - {title} ({final_path.name})")
         return True, track_dict, None
 
+    def _get_active_cookie_file(self) -> Optional[str]:
+        """Resolve active cookies.txt file across standard locations."""
+        candidates = [
+            self.cookies_path,
+            settings.CONFIG_DIR / "cookies.txt",
+            settings.DATA_DIR / "cookies.txt",
+            settings.BASE_DIR / "config" / "cookies.txt",
+            settings.BASE_DIR / "cookies.txt",
+            Path("/opt/music-data-collector/config/cookies.txt"),
+            Path("/opt/music-data-collector/data/cookies.txt"),
+        ]
+        for cand in candidates:
+            if cand:
+                p = Path(cand)
+                if p.exists() and p.is_file() and p.stat().st_size > 10:
+                    return str(p.resolve())
+        return None
+
     def _download_spotdl(
         self,
         spotify_url: str,
@@ -444,8 +462,9 @@ class DownloadManager:
             "--headless",
         ]
 
-        if self.cookies_path and self.cookies_path.exists():
-            cmd.extend(["--cookie-file", str(self.cookies_path)])
+        active_cookie = self._get_active_cookie_file()
+        if active_cookie:
+            cmd.extend(["--cookie-file", active_cookie])
 
         if proxy:
             cmd.extend(["--proxy", proxy])
@@ -484,7 +503,7 @@ class DownloadManager:
             ],
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "web"]
+                    "player_client": ["android", "ios", "mweb", "web"]
                 }
             },
             "quiet": True,
@@ -496,8 +515,9 @@ class DownloadManager:
         if not target_url_or_query.startswith("http://") and not target_url_or_query.startswith("https://"):
             ydl_opts["default_search"] = "ytsearch1"
 
-        if self.cookies_path and self.cookies_path.exists():
-            ydl_opts["cookiefile"] = str(self.cookies_path)
+        active_cookie = self._get_active_cookie_file()
+        if active_cookie:
+            ydl_opts["cookiefile"] = active_cookie
 
         if proxy:
             ydl_opts["proxy"] = proxy

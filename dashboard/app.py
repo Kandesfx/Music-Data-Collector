@@ -1305,6 +1305,34 @@ def upload_cookies():
     return jsonify({"success": True, "size": target_path.stat().st_size})
 
 
+@socketio.on("upload_cookie_text")
+def handle_upload_cookie_text(data):
+    """Save raw cookies text from textarea into config/cookies.txt."""
+    try:
+        raw_text = data.get("cookie_text", "").strip()
+        if not raw_text:
+            emit("cookie_saved", {"success": False, "error": "Cookie content is empty!"})
+            return
+
+        target_path = settings.CONFIG_DIR / "cookies.txt"
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(target_path, "w", encoding="utf-8") as f:
+            f.write(raw_text)
+
+        data_cookie = settings.DATA_DIR / "cookies.txt"
+        data_cookie.parent.mkdir(parents=True, exist_ok=True)
+        with open(data_cookie, "w", encoding="utf-8") as f:
+            f.write(raw_text)
+
+        settings.COOKIES_FILE = target_path
+        controller.dm.cookies_path = target_path
+        controller.log(f"🍪 Applied raw YouTube cookies.txt ({len(raw_text)} chars). Server authenticated.", level="success")
+        emit("cookie_saved", {"success": True, "size": len(raw_text)})
+    except Exception as ex:
+        logger.error(f"Error saving cookie text: {ex}")
+        emit("cookie_saved", {"success": False, "error": str(ex)})
+
+
 # ─── Socket Events For Admin Management & Team Profiles ──────
 
 @socketio.on("admin_get_users")

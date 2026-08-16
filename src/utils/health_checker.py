@@ -67,6 +67,10 @@ class HealthChecker:
         )
         return self.pause_seconds
 
+    def get_pause_duration(self) -> int:
+        """Return pause duration in seconds and increment counter."""
+        return self.trigger_pause()
+
     def reset_pauses(self):
         """Reset pause counter upon sustained recovery."""
         if self.pause_count > 0:
