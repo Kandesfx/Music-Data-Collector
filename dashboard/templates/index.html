@@ -38,8 +38,8 @@
       <a id="btn-open-settings-modal" class="nav-item">
         <span class="nav-icon text-cyan">⚙️</span> Settings &amp; Test Live
       </a>
-      <a id="btn-open-team-modal" class="nav-item">
-        <span class="nav-icon text-purple">👥</span> Team &amp; Leaderboard
+      <a id="btn-open-team-modal" class="nav-item" onclick="window.openTeamModal()">
+        <span class="nav-icon text-purple">👥</span> Team &amp; Phân Quyền
       </a>
       <a id="btn-open-audit-modal" class="nav-item" onclick="openAuditLogModal()">
         <span class="nav-icon text-green">⚡</span> Popup Xem Nhanh Logs
@@ -1851,6 +1851,115 @@
         <div class="flex-row" style="gap: 8px; width: auto;">
           <button class="btn btn-primary" onclick="window.closeGuideModal()" style="padding: 5px 16px; font-size: 12px;">Đã Hiểu &amp; Bắt Đầu Sử Dụng</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 7b: Team Members & Role Permission Management Modal -->
+  <div id="team-modal" class="modal-overlay" style="z-index: 999999;">
+    <div class="modal-container large" style="max-width: 1080px; width: 95vw; max-height: 92vh; display: flex; flex-direction: column;">
+      <div class="modal-header" style="background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(6,182,212,0.1)); border-bottom: 1px solid rgba(139,92,246,0.3);">
+        <div>
+          <div class="modal-title text-purple" style="display: flex; align-items: center; gap: 8px; font-size: 15px;">
+            <span>👥</span> QUẢN TRỊ THÀNH VIÊN NHÓM &amp; PHÂN QUYỀN HỆ THỐNG
+          </div>
+          <div class="modal-subtitle" style="font-size: 11.5px; color: var(--text-dim); margin-top: 2px;">
+            Thêm thành viên, phân quyền Admin/Collector/Viewer, đổi mật khẩu, khóa tài khoản và theo dõi đóng góp Đồ Án Tốt Nghiệp
+          </div>
+        </div>
+        <button id="btn-close-team-modal" class="modal-close" onclick="window.closeTeamModal()">✕</button>
+      </div>
+
+      <div class="modal-body flex-col" style="overflow-y: auto; padding: 16px 20px; gap: 14px;">
+        <div class="flex-between">
+          <div>
+            <span style="font-weight: 700; color: var(--accent-purple); font-size: 13px;">📋 Danh Sách Thành Viên &amp; Quyền Hạn Trong Nhóm</span>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">Dữ liệu tài khoản lưu trữ bảo mật trên MongoDB với thuật toán băm PBKDF2-SHA256</div>
+          </div>
+          <div class="flex-row" style="gap: 6px; width: auto;">
+            <button id="btn-open-add-user" class="btn btn-primary" style="padding: 4px 12px; font-size: 11px;" onclick="window.openAddUserForm()">
+              ➕ Thêm Thành Viên Mới
+            </button>
+          </div>
+        </div>
+
+        <!-- Form Thêm / Sửa Thành Viên & Phân Quyền -->
+        <form id="form-user-manager" class="flex-col" style="display: none; background: rgba(0,0,0,0.35); border: 1px solid var(--accent-purple); border-radius: var(--radius-md); padding: 14px; gap: 10px;">
+          <input type="hidden" id="user-edit-original-username" value="">
+          <div class="flex-between">
+            <span id="user-form-title" style="font-weight: 700; color: var(--accent-purple); font-size: 12.5px;">➕ Thêm Tài Khoản Thành Viên Mới</span>
+            <button type="button" id="btn-close-user-form" class="btn btn-secondary" style="padding: 2px 6px; font-size: 10px;" onclick="window.closeUserForm()">✕ Đóng</button>
+          </div>
+
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">Tên Đăng Nhập (Username) (*):</label>
+              <input type="text" id="user-form-username" class="input-field" placeholder="Ví dụ: hainguyen" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tên Hiển Thị (Display Name) (*):</label>
+              <input type="text" id="user-form-display-name" class="input-field" placeholder="Ví dụ: Nguyễn Văn Hải (Trưởng Nhóm)" required>
+            </div>
+          </div>
+
+          <div class="grid-3">
+            <div class="form-group">
+              <label class="form-label">Email Liên Hệ:</label>
+              <input type="email" id="user-form-email" class="input-field" placeholder="member@datn.local">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phân Quyền (Role) (*):</label>
+              <select id="user-form-role" class="input-field">
+                <option value="admin">👑 Quản Trị Viên (Admin) - Toàn quyền</option>
+                <option value="collector" selected>⚡ Thành Viên (Collector) - Cào &amp; Tải nhạc</option>
+                <option value="viewer">👁️ Khách Xem (Viewer) - Chỉ xem &amp; Xuất dữ liệu</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Mật Khẩu (*):</label>
+              <input type="password" id="user-form-password" class="input-field" placeholder="Nhập mật khẩu (Mặc định: 123456)">
+              <span id="user-form-password-hint" style="font-size: 10px; color: var(--text-dim); display: none;">* Để trống nếu không muốn đổi mật khẩu</span>
+            </div>
+          </div>
+
+          <div class="flex-row" style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.25); border-radius: var(--radius-sm); padding: 8px 10px;">
+            <label class="flex-row" style="gap: 8px; align-items: center; cursor: pointer; width: 100%;">
+              <input type="checkbox" id="user-form-is-active" style="width: 16px; height: 16px; cursor: pointer;" checked>
+              <span style="font-size: 11.5px; font-weight: 700; color: #c084fc;">✓ Cho phép tài khoản này đăng nhập và hoạt động trên hệ thống (Kích hoạt)</span>
+            </label>
+          </div>
+
+          <div class="flex-row" style="justify-content: flex-end; gap: 6px; margin-top: 4px;">
+            <button type="button" class="btn btn-secondary" onclick="window.closeUserForm()">Hủy Bỏ</button>
+            <button type="submit" id="btn-save-user-account" class="btn btn-primary" style="background: var(--accent-purple); border-color: var(--accent-purple);">💾 Lưu Thông Tin Tài Khoản</button>
+          </div>
+        </form>
+
+        <!-- Bảng Danh Sách Thành Viên -->
+        <div class="table-responsive" style="max-height: 380px; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Tài Khoản &amp; Tên Hiển Thị</th>
+                <th style="width: 150px;">Phân Quyền (Role)</th>
+                <th style="width: 180px;">Email &amp; Ngày Tạo</th>
+                <th style="width: 180px;">Đóng Góp (Thu Thập / Tải)</th>
+                <th style="width: 120px; text-align: center;">Trạng Thái</th>
+                <th style="width: 140px; text-align: center;">Hành Động</th>
+              </tr>
+            </thead>
+            <tbody id="team-members-table-body">
+              <tr><td colspan="6" class="text-center text-dim" style="padding: 20px;">⏳ Đang tải danh sách thành viên từ cơ sở dữ liệu...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer flex-between" style="border-top: 1px solid var(--border-color); background: rgba(15,23,42,0.9); padding: 10px 18px;">
+        <span style="font-size: 11px; color: var(--text-muted);">
+          💡 Tài khoản Admin có quyền cao nhất. Mật khẩu được mã hóa an toàn 1 chiều và không thể giải mã ngược.
+        </span>
+        <button class="btn btn-secondary" onclick="window.closeTeamModal()">Đóng</button>
       </div>
     </div>
   </div>

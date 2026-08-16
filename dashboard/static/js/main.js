@@ -4345,3 +4345,215 @@ socket.on("track_redownloaded", (data) => {
   }
 })();
 
+// ─── Team Members & Role Permission Management Studio JS ────
+(function initTeamManager() {
+  const teamModal = document.getElementById("team-modal");
+  const formUserManager = document.getElementById("form-user-manager");
+  const teamMembersTableBody = document.getElementById("team-members-table-body");
+  const userEditOriginalUsername = document.getElementById("user-edit-original-username");
+  const userFormUsername = document.getElementById("user-form-username");
+  const userFormDisplayName = document.getElementById("user-form-display-name");
+  const userFormEmail = document.getElementById("user-form-email");
+  const userFormRole = document.getElementById("user-form-role");
+  const userFormPassword = document.getElementById("user-form-password");
+  const userFormPasswordHint = document.getElementById("user-form-password-hint");
+  const userFormIsActive = document.getElementById("user-form-is-active");
+
+  window.openTeamModal = function() {
+    if (teamModal) {
+      teamModal.style.display = "flex";
+      loadTeamMembers();
+    }
+  };
+
+  window.closeTeamModal = function() {
+    if (teamModal) teamModal.style.display = "none";
+  };
+
+  window.openAddUserForm = function() {
+    if (formUserManager) {
+      formUserManager.reset();
+      userEditOriginalUsername.value = "";
+      userFormUsername.disabled = false;
+      userFormPassword.required = true;
+      if (userFormPasswordHint) userFormPasswordHint.style.display = "none";
+      if (userFormIsActive) userFormIsActive.checked = true;
+      document.getElementById("user-form-title").textContent = "➕ Thêm Tài Khoản Thành Viên Mới";
+      formUserManager.style.display = "flex";
+    }
+  };
+
+  window.closeUserForm = function() {
+    if (formUserManager) formUserManager.style.display = "none";
+  };
+
+  async function loadTeamMembers() {
+    if (!teamMembersTableBody) return;
+    try {
+      teamMembersTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-dim" style="padding: 20px;">⏳ Đang tải danh sách thành viên từ cơ sở dữ liệu...</td></tr>`;
+      const res = await fetch("/api/users");
+      const data = await res.json();
+
+      if (!data.success || !data.users || data.users.length === 0) {
+        teamMembersTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-dim" style="padding: 20px;">Chưa có thành viên nào. Hãy bấm '➕ Thêm Thành Viên Mới'.</td></tr>`;
+        return;
+      }
+
+      teamMembersTableBody.innerHTML = data.users.map((u) => {
+        let roleBadge = `<span class="badge badge-secondary" style="font-size: 10.5px;">⚡ Collector</span>`;
+        if (u.role === "admin") {
+          roleBadge = `<span class="badge badge-danger" style="font-size: 10.5px; font-weight: 700; background: rgba(239,68,68,0.18); color: #f87171; border: 1px solid #f87171;">👑 Admin</span>`;
+        } else if (u.role === "viewer") {
+          roleBadge = `<span class="badge badge-cyan" style="font-size: 10.5px;">👁️ Viewer</span>`;
+        }
+
+        const stats = u.stats || {};
+        const crawled = stats.crawled_tracks_count || 0;
+        const downloaded = stats.downloaded_tracks_count || 0;
+        const createdDate = u.created_at ? new Date(u.created_at).toLocaleDateString("vi-VN") : "-";
+
+        const statusBadge = u.is_active
+          ? `<span class="badge badge-success" style="font-size: 10px; cursor: pointer;" onclick="window.toggleUserActive('${u.username}', false)" title="Bấm để tạm khóa tài khoản">🟢 Đang Kích Hoạt</span>`
+          : `<span class="badge badge-danger" style="font-size: 10px; cursor: pointer;" onclick="window.toggleUserActive('${u.username}', true)" title="Bấm để mở khóa tài khoản">🔴 Đang Khóa</span>`;
+
+        const isAdminSelf = u.username === "admin";
+        const deleteBtn = isAdminSelf
+          ? `<button class="btn btn-secondary" style="padding: 3px 6px; font-size: 10px; opacity: 0.5;" disabled title="Không thể xóa Admin mặc định">🔒</button>`
+          : `<button class="btn btn-danger" style="padding: 3px 6px; font-size: 10px;" onclick="window.deleteUser('${u.username}', '${u.display_name || u.username}')" title="Xóa thành viên">🗑️</button>`;
+
+        return `
+          <tr style="${isAdminSelf ? 'background: rgba(139,92,246,0.05);' : ''}">
+            <td>
+              <div style="font-weight: 700; color: var(--text-main); font-size: 12.5px;">
+                👤 ${u.display_name || u.username}
+              </div>
+              <div class="font-mono text-dim" style="font-size: 10.5px; margin-top: 2px;">
+                @${u.username}
+              </div>
+            </td>
+            <td>${roleBadge}</td>
+            <td>
+              <div style="font-size: 11px; color: var(--text-main);">${u.email || '<i class="text-dim">Chưa có email</i>'}</div>
+              <div class="text-dim" style="font-size: 10px; margin-top: 2px;">Tạo: ${createdDate}</div>
+            </td>
+            <td>
+              <div style="font-size: 11px;"><b>${crawled.toLocaleString()}</b> bài cào</div>
+              <div class="text-dim" style="font-size: 10px;"><b>${downloaded.toLocaleString()}</b> bài tải MP3</div>
+            </td>
+            <td style="text-align: center;">${statusBadge}</td>
+            <td style="text-align: center;">
+              <div class="flex-row" style="justify-content: center; gap: 4px;">
+                <button class="btn btn-secondary" style="padding: 3px 6px; font-size: 10px;" onclick="window.editUser('${u.username}')" title="Chỉnh sửa phân quyền &amp; thông tin">✏️ Sửa</button>
+                ${deleteBtn}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    } catch (err) {
+      if (teamMembersTableBody) {
+        teamMembersTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-red" style="padding: 20px;">Lỗi tải thành viên: ${err.message}</td></tr>`;
+      }
+    }
+  }
+  window.loadTeamMembers = loadTeamMembers;
+
+  // Form Submit (Create or Update)
+  if (formUserManager) {
+    formUserManager.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        const payload = {
+          username: userFormUsername.value.trim().toLowerCase(),
+          display_name: userFormDisplayName.value.trim(),
+          email: userFormEmail.value.trim(),
+          role: userFormRole.value,
+          password: userFormPassword.value.trim(),
+          is_active: userFormIsActive ? userFormIsActive.checked : true,
+        };
+
+        const res = await fetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (data.success) {
+          formUserManager.style.display = "none";
+          loadTeamMembers();
+          appendLog(`👤 Đã lưu tài khoản: @${payload.username} (${payload.role.toUpperCase()}) - ${payload.display_name}`, "success");
+        } else {
+          alert(`Lỗi: ${data.error}`);
+        }
+      } catch (err) {
+        alert(`Lỗi lưu tài khoản: ${err.message}`);
+      }
+    });
+  }
+
+  window.editUser = async function(username) {
+    try {
+      const res = await fetch("/api/users");
+      const data = await res.json();
+      const target = data.users.find((u) => u.username === username);
+      if (!target) return;
+
+      userEditOriginalUsername.value = target.username;
+      userFormUsername.value = target.username;
+      userFormUsername.disabled = true; // Cannot change username on edit
+      userFormDisplayName.value = target.display_name || "";
+      userFormEmail.value = target.email || "";
+      userFormRole.value = target.role || "collector";
+      userFormPassword.value = "";
+      userFormPassword.required = false;
+      if (userFormPasswordHint) userFormPasswordHint.style.display = "inline";
+      if (userFormIsActive) userFormIsActive.checked = Boolean(target.is_active);
+
+      document.getElementById("user-form-title").textContent = `✏️ Chỉnh Sửa Quyền Hạn: @${target.username}`;
+      formUserManager.style.display = "flex";
+    } catch (e) {
+      alert(`Lỗi: ${e.message}`);
+    }
+  };
+
+  window.toggleUserActive = async function(username, shouldBeActive) {
+    try {
+      const res = await fetch(`/api/users/${username}/toggle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: shouldBeActive }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        loadTeamMembers();
+        appendLog(`👤 Đã ${shouldBeActive ? 'kích hoạt' : 'tạm khóa'} tài khoản @${username}`, "info");
+      }
+    } catch (e) {
+      alert(`Lỗi: ${e.message}`);
+    }
+  };
+
+  window.deleteUser = function(username, displayName) {
+    showConfirmModal({
+      title: "⚠️ Xác Nhận Xóa Thành Viên",
+      message: `Bạn có chắc chắn muốn xóa tài khoản <b>'@${username}'</b> (${displayName}) khỏi hệ thống?`,
+      proceedText: "🗑️ Xóa Thành Viên",
+      isDanger: true,
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/users/${username}`, { method: "DELETE" });
+          const data = await res.json();
+          if (data.success) {
+            loadTeamMembers();
+            appendLog(`🗑️ Đã xóa tài khoản @${username} khỏi hệ thống`, "warning");
+          } else {
+            alert(`Lỗi xóa: ${data.error}`);
+          }
+        } catch (e) {
+          alert(`Lỗi: ${e.message}`);
+        }
+      }
+    });
+  };
+})();
+

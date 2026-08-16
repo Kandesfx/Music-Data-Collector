@@ -264,7 +264,70 @@ class AuthManager:
             logger.error(f"Error fetching activity logs: {e}")
             return []
 
-    # ─── Admin Management Operations ────────────────────────────
+    # ─── Admin Management Operations & Role CRUD ────────────────
+
+    def get_all_users(self) -> List[Dict[str, Any]]:
+        """Retrieve all users with role, metrics and active status."""
+        if not self.db.is_connected():
+            return []
+        try:
+            users = list(self.db.db.users.find({}, {"password_hash": 0, "_id": 0}).sort("created_at", -1))
+            return self._sanitize_doc(users)
+        except Exception as e:
+            logger.error(f"Error fetching users list: {e}")
+            return []
+
+    def get_user(self, username: str) -> Optional[Dict[str, Any]]:
+        """Retrieve single user document by username."""
+        if not self.db.is_connected() or not username:
+            return None
+        user = self.db.db.users.find_one({"username": username.strip().lower()}, {"password_hash": 0, "_id": 0})
+        return self._sanitize_doc(user) if user else None
+
+    def upsert_user(self, data: Dict[str, Any]) -> bool:
+        """Create or update a user account and role permission."""
+        if not self.db.is_connected() or not data.get("username"):
+            return False
+        username = data["username"].strip().lower()
+        existing = self.db.db.users.find_one({"username": username})
+        now = datetime.utcnow()
+
+        if existing:
+            # Update existing
+            update_fields: Dict[str, Any] = {
+                "display_name": data.get("display_name", existing.get("display_name", username)),
+                "email": data.get("email", existing.get("email", "")),
+                "role": data.get("role", existing.get("role", "collector")),
+                "is_active": data.get("is_active", existing.get("is_active", True)),
+                "updated_at": now,
+            }
+            if data.get("password") and data["password"].strip():
+                update_fields["password_hash"] = self.hash_password(data["password"].strip())
+            self.db.db.users.update_one({"username": username}, {"$set": update_fields})
+            return True
+        else:
+            # Create new
+            pwd = data.get("password", "").strip() or "123456"
+            user_doc = {
+                "username": username,
+                "display_name": data.get("display_name", "").strip() or username,
+                "password_hash": self.hash_password(pwd),
+                "email": data.get("email", "").strip().lower(),
+                "role": data.get("role", "collector"),
+                "is_active": data.get("is_active", True),
+                "created_at": now,
+                "updated_at": now,
+                "last_login": None,
+                "stats": {
+                    "crawled_tracks_count": 0,
+                    "downloaded_tracks_count": 0,
+                    "direct_links_count": 0,
+                    "last_action": "Tài khoản vừa được tạo",
+                    "last_active_at": now,
+                },
+            }
+            self.db.db.users.insert_one(user_doc)
+            return True
 
     def admin_reset_password(self, username: str, new_password: str) -> bool:
         """Admin resets a member's password."""

@@ -59,6 +59,7 @@ class PipelineController:
 
     def __init__(self):
         self.db = DBManager()
+        self.auth = AuthManager(self.db)
         self.fm = FileManager()
         self.sm = SessionManager()
         self.pm = ProxyManager(db_manager=self.db)
@@ -1673,14 +1674,72 @@ def test_all_proxies_endpoint():
     return jsonify({"success": True, "results": results})
 
 
+# ─── User Accounts & Role Permission REST Endpoints ──────────
+
+@app.route("/api/users", methods=["GET"])
+def list_users_endpoint():
+    """Retrieve all users with roles and metrics."""
+    users = controller.auth.get_all_users()
+    return jsonify({"success": True, "users": users})
+
+
+@app.route("/api/users", methods=["POST"])
+def upsert_user_endpoint():
+    """Create or update a user account and role."""
+    data = request.get_json() or {}
+    username = data.get("username", "").strip().lower()
+    if not username:
+        return jsonify({"success": False, "error": "Tên đăng nhập (Username) không được để trống!"}), 400
+
+    ok = controller.auth.upsert_user(data)
+    if ok:
+        role = data.get("role", "collector")
+        controller.log(f"👤 Đã lưu thông tin tài khoản thành viên: @{username} (Role: {role})", level="success")
+        return jsonify({"success": True, "username": username})
+    return jsonify({"success": False, "error": "Không thể lưu tài khoản"}), 400
+
+
+@app.route("/api/users/<username>", methods=["DELETE"])
+def delete_user_endpoint(username):
+    """Delete a user account."""
+    if username.strip().lower() == "admin":
+        return jsonify({"success": False, "error": "Không thể xóa tài khoản Quản trị viên mặc định 'admin'!"}), 400
+
+    ok = controller.auth.admin_delete_user(username)
+    if ok:
+        controller.log(f"🗑️ Đã xóa tài khoản thành viên: @{username}", level="warning")
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Không tìm thấy người dùng hoặc không thể xóa"}), 404
+
+
+@app.route("/api/users/<username>/toggle", methods=["POST"])
+def toggle_user_status_endpoint(username):
+    """Toggle active status of a user."""
+    data = request.get_json() or {}
+    is_active = bool(data.get("is_active", True))
+    ok = controller.auth.admin_toggle_user_status(username, is_active)
+    if ok:
+        status_str = "Kích hoạt" if is_active else "Khóa"
+        controller.log(f"👤 Đã {status_str} tài khoản: @{username}", level="info")
+        return jsonify({"success": True, "is_active": is_active})
+    return jsonify({"success": False, "error": "Không tìm thấy người dùng"}), 404
+
+
+@app.route("/api/team/leaderboard", methods=["GET"])
+def get_team_leaderboard_endpoint():
+    """Retrieve team leaderboard ranking."""
+    leaderboard = controller.auth.get_team_leaderboard()
+    return jsonify({"success": True, "leaderboard": leaderboard})
+
+
 # ─── Socket Events For Admin Management & Team Profiles ──────
 
 @socketio.on("admin_get_users")
 def handle_admin_get_users():
     """Emit team members leaderboard and activity logs."""
     try:
-        leaderboard = auth_mgr.get_team_leaderboard()
-        logs = auth_mgr.get_activity_logs(limit=30)
+        leaderboard = controller.auth.get_team_leaderboard()
+        logs = controller.auth.get_activity_logs(limit=30)
         emit("team_data", {"users": leaderboard, "logs": logs})
     except Exception as ex:
         logger.error(f"Error handling admin_get_users: {ex}")
@@ -1700,7 +1759,7 @@ def handle_admin_create_user(data):
         emit("admin_user_created", {"success": False, "error": "Vui lòng nhập đầy đủ Username và Mật khẩu!"})
         return
 
-    user = auth_mgr.create_user(username, password, email, role, display_name)
+    user = controller.auth.create_user(username, password, email, role, display_name)
     if user:
         controller.log(f"Admin created member account: @{username} ({role})", level="success")
         emit("admin_user_created", {"success": True, "username": username})
@@ -1714,7 +1773,7 @@ def handle_admin_reset_password(data):
     """Admin resets a member's password."""
     username = data.get("username", "").strip()
     new_password = data.get("password", "").strip()
-    ok = auth_mgr.admin_reset_password(username, new_password)
+    ok = controller.auth.admin_reset_password(username, new_password)
     if ok:
         controller.log(f"Admin reset password for @{username}.", level="info")
         emit("admin_action_result", {"success": True, "message": f"Đã đổi mật khẩu cho @{username}!"})
@@ -1727,7 +1786,7 @@ def handle_admin_toggle_user_status(data):
     """Admin enables/disables a user account."""
     username = data.get("username", "").strip()
     is_active = bool(data.get("is_active", True))
-    ok = auth_mgr.admin_toggle_user_status(username, is_active)
+    ok = controller.auth.admin_toggle_user_status(username, is_active)
     if ok:
         status_label = "Mở khóa" if is_active else "Tạm khóa"
         controller.log(f"Admin {status_label} tài khoản: @{username}", level="info")
@@ -1738,7 +1797,7 @@ def handle_admin_toggle_user_status(data):
 def handle_admin_delete_user(data):
     """Admin deletes a user account."""
     username = data.get("username", "").strip()
-    ok = auth_mgr.admin_delete_user(username)
+    ok = controller.auth.admin_delete_user(username)
     if ok:
         controller.log(f"Admin deleted member account: @{username}", level="warning")
         handle_admin_get_users()
@@ -1747,14 +1806,14 @@ def handle_admin_delete_user(data):
 @socketio.on("get_team_profiles")
 def handle_get_team_profiles():
     """Emit shared Spotify & Proxy profiles."""
-    profiles = auth_mgr.get_team_profiles()
+    profiles = controller.auth.get_team_profiles()
     emit("team_profiles_data", profiles)
 
 
 @socketio.on("save_team_profile")
 def handle_save_team_profile(data):
     """Save a shared team profile."""
-    ok = auth_mgr.add_team_profile(data)
+    ok = controller.auth.add_team_profile(data)
     if ok:
         controller.log(f"Saved shared team profile: {data.get('name')}", level="success")
         handle_get_team_profiles()
