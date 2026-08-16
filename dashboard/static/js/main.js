@@ -987,14 +987,67 @@ const inputCookieFile = document.getElementById("input-cookie-file");
 const btnUploadCookieFile = document.getElementById("btn-upload-cookie-file");
 const inputCookieText = document.getElementById("input-cookie-text");
 const btnSaveCookieText = document.getElementById("btn-save-cookie-text");
+const btnProbeCookie = document.getElementById("btn-probe-cookie");
+const cookieStatusBadge = document.getElementById("cookie-status-badge");
+const cookieExpiryText = document.getElementById("cookie-expiry-text");
+const cookieMessageText = document.getElementById("cookie-message-text");
+
+function renderCookieHealth(data) {
+  if (!cookieStatusBadge) return;
+  if (!data || !data.exists) {
+    cookieStatusBadge.style.background = "rgba(100, 116, 139, 0.3)";
+    cookieStatusBadge.style.color = "#94a3b8";
+    cookieStatusBadge.textContent = "⚪ Chưa Nạp File";
+    if (cookieExpiryText) cookieExpiryText.textContent = "N/A";
+    if (cookieMessageText) cookieMessageText.textContent = "Chưa có file cookies.txt trên máy chủ.";
+    return;
+  }
+
+  if (data.status === "ACTIVE") {
+    cookieStatusBadge.style.background = "rgba(16, 185, 129, 0.2)";
+    cookieStatusBadge.style.color = "var(--accent-green)";
+    cookieStatusBadge.textContent = "🟢 Hoạt Động (Hợp Lệ)";
+  } else if (data.status === "EXPIRED") {
+    cookieStatusBadge.style.background = "rgba(239, 68, 68, 0.2)";
+    cookieStatusBadge.style.color = "var(--accent-red)";
+    cookieStatusBadge.textContent = "🔴 Hết Hạn / Đã Đăng Xuất";
+  } else {
+    cookieStatusBadge.style.background = "rgba(245, 158, 11, 0.2)";
+    cookieStatusBadge.style.color = "var(--accent-yellow)";
+    cookieStatusBadge.textContent = "🟡 Cảnh Báo Sức Khỏe";
+  }
+
+  if (cookieExpiryText) cookieExpiryText.textContent = data.earliest_expiry_formatted || "Không xác định";
+  if (cookieMessageText) cookieMessageText.textContent = data.message || "Đã kiểm tra cấu trúc.";
+}
+
+function requestCookieCheck(probe = true) {
+  if (cookieStatusBadge) cookieStatusBadge.textContent = "⏳ Đang kiểm tra...";
+  if (cookieMessageText) cookieMessageText.textContent = "Đang gửi tín hiệu thăm dò tới YouTube...";
+  if (typeof socket !== "undefined" && socket.connected) {
+    socket.emit("check_cookie_status", { probe: probe });
+  } else {
+    fetch(`/api/cookie_health?probe=${probe}`)
+      .then((r) => r.json())
+      .then((d) => renderCookieHealth(d))
+      .catch((e) => console.error("Cookie health check error:", e));
+  }
+}
 
 if (btnOpenCookieModal && cookieModal) {
   btnOpenCookieModal.addEventListener("click", () => {
     cookieModal.style.display = "flex";
+    requestCookieCheck(true);
   });
 
   btnCloseCookieModal.addEventListener("click", () => {
     cookieModal.style.display = "none";
+  });
+}
+
+if (btnProbeCookie) {
+  btnProbeCookie.addEventListener("click", () => {
+    requestCookieCheck(true);
   });
 }
 
@@ -1015,7 +1068,7 @@ if (btnUploadCookieFile) {
       .then((data) => {
         if (data.success) {
           alert(`✅ Đã tải file cookies.txt lên server thành công (${data.size} bytes)!`);
-          cookieModal.style.display = "none";
+          requestCookieCheck(true);
         } else {
           alert(`❌ Tải cookies thất bại: ${data.error}`);
         }
@@ -1038,7 +1091,23 @@ if (btnSaveCookieText) {
 socket.on("cookie_saved", (res) => {
   if (res.success) {
     alert("✅ Đã áp dụng cookies.txt vào phiên hoạt động của server!");
-    cookieModal.style.display = "none";
+    requestCookieCheck(true);
+  }
+});
+
+socket.on("cookie_status_result", (data) => {
+  renderCookieHealth(data);
+});
+
+// Real-time Runtime Expiration Alert Handler
+socket.on("cookie_expired_alert", (data) => {
+  console.warn("🚨 Cookie Expired Alert received:", data);
+  const alertMsg = `⚠️ CẢNH BÁO KHẨN CẤP:\n\nCookie ${data.service ? data.service.toUpperCase() : "YOUTUBE"} đã bị HẾT HẠN hoặc BỊ ĐĂNG XUẤT trên máy chủ!\n\nPipeline đã TỰ ĐỘNG TẠM DỪNG để bảo vệ tiến trình.\nVui lòng mở mục 'Headless Cookies' để nạp lại cookie mới và tiếp tục tải.`;
+  alert(alertMsg);
+
+  if (cookieModal) {
+    cookieModal.style.display = "flex";
+    requestCookieCheck(false);
   }
 });
 

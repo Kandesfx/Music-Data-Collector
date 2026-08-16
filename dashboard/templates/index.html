@@ -1428,15 +1428,30 @@
   <div id="cookie-modal" class="modal-overlay">
     <div class="modal-container medium">
       <div class="modal-header">
-        <div class="modal-title text-yellow">🍪 Cấu Hình Cookies Headless Cho YouTube/Spotify</div>
+        <div class="modal-title text-yellow">🍪 Cấu Hình & Giám Sát Sức Khỏe Cookies Headless</div>
         <button id="btn-close-cookie-modal" class="modal-close">✕</button>
       </div>
       <div class="modal-body flex-col">
+        <!-- Live Cookie Health Diagnostic Card -->
+        <div id="cookie-health-card" style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: var(--radius-md); padding: 12px; margin-bottom: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-weight: 600; font-size: 13px;">Trạng Thái Cookie Hiện Tại:</span>
+            <span id="cookie-status-badge" class="badge" style="background: rgba(100, 116, 139, 0.2); color: #94a3b8; font-size: 11px; padding: 3px 8px;">Đang kiểm tra...</span>
+          </div>
+          <div id="cookie-health-details" style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5;">
+            <div>• <b>Hạn sử dụng:</b> <span id="cookie-expiry-text">Đang tải...</span></div>
+            <div>• <b>Chi tiết:</b> <span id="cookie-message-text">Đang kiểm tra kết nối...</span></div>
+          </div>
+          <div style="margin-top: 10px; display: flex; gap: 8px;">
+            <button id="btn-probe-cookie" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;">🔍 Kiểm Tra Sức Khỏe Ngay</button>
+          </div>
+        </div>
+
         <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); padding: 8px 12px; border-radius: var(--radius-md); font-size: 11.5px;">
           <b>💡 Cookies giải quyết triệt để Bot Detection / 429 Rate Limit:</b> Tải file Netscape <code>cookies.txt</code> hoặc dán trực tiếp.
         </div>
 
-        <div class="form-group">
+        <div class="form-group" style="margin-top: 10px;">
           <label class="form-label">Tải lên file cookies.txt:</label>
           <div class="flex-row">
             <input type="file" id="input-cookie-file" accept=".txt" class="input-field" style="padding: 4px;">
@@ -1446,10 +1461,11 @@
 
         <div class="form-group">
           <label class="form-label">Hoặc Dán Nội Dung Text Cookies (Netscape format):</label>
-          <textarea id="input-cookie-text" class="input-field font-mono" style="height: 120px; font-size: 11px;" placeholder="# Netscape HTTP Cookie File&#10;.youtube.com TRUE / FALSE 1780000000 ..."></textarea>
+          <textarea id="input-cookie-text" class="input-field font-mono" style="height: 110px; font-size: 11px;" placeholder="# Netscape HTTP Cookie File&#10;.youtube.com TRUE / FALSE 1780000000 ..."></textarea>
         </div>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer" style="display: flex; justify-content: space-between;">
+        <span style="font-size: 11px; color: var(--text-muted); align-self: center;">Tự động tạm dừng pipeline khi hết hạn</span>
         <button id="btn-save-cookie-text" class="btn btn-primary">💾 Áp Dụng Cookies</button>
       </div>
     </div>

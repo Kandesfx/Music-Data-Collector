@@ -40,6 +40,7 @@ class DownloadManager:
         session_manager: Optional[SessionManager] = None,
         health_checker: Optional[HealthChecker] = None,
         proxy_manager: Optional[ProxyManager] = None,
+        on_cookie_expired: Optional[Callable[[str, str], None]] = None,
     ):
         self.db = db_manager or DBManager()
         self.fm = file_manager or FileManager()
@@ -47,6 +48,7 @@ class DownloadManager:
         self.health_checker = health_checker or HealthChecker()
         self.proxy_manager = proxy_manager or ProxyManager()
         self.matcher = YTMusicMatcher()
+        self.on_cookie_expired = on_cookie_expired
 
         self.browser_cookies = settings.COOKIES_FROM_BROWSER
         self.cookies_path = settings.YOUTUBE_COOKIES_PATH
@@ -248,6 +250,23 @@ class DownloadManager:
             self.proxy_manager.report_failure(current_proxy)
 
         logger.error(f"Download failed for {artist} - {title}: {error_message}")
+        if error_message:
+            cookie_indicators = [
+                "Sign in to confirm you’re not a bot",
+                "cookies for the authentication",
+                "LOGIN_REQUIRED",
+                "HTTP Error 401",
+                "login_required",
+                "Sign in to confirm your age",
+            ]
+            if any(ci in error_message for ci in cookie_indicators):
+                logger.warning(f"⚠️ Detected Cookie Invalidation / Bot Check during download: {error_message[:80]}")
+                if hasattr(self, "on_cookie_expired") and self.on_cookie_expired:
+                    try:
+                        self.on_cookie_expired("youtube", error_message)
+                    except Exception as ex:
+                        logger.error(f"Error in on_cookie_expired callback: {ex}")
+
         self.db.update_track_download_status(
             spotify_id=spotify_id,
             status="failed",

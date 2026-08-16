@@ -31,6 +31,7 @@ from src.collectors.trend_manager import TrendManager
 from src.utils.health_checker import HealthChecker
 from src.utils.session_manager import SessionManager
 from src.utils.proxy_manager import ProxyManager
+from src.utils.cookie_checker import CookieHealthChecker
 from src.utils.logger import get_logger
 
 logger = get_logger("dashboard")
@@ -55,6 +56,7 @@ class PipelineController:
             session_manager=self.sm,
             health_checker=self.health,
             proxy_manager=self.pm,
+            on_cookie_expired=self.handle_cookie_expired,
         )
 
         self.is_running = False
@@ -63,6 +65,18 @@ class PipelineController:
         self.active_task_name = "Idle"
         self.current_track: Optional[Dict[str, Any]] = None
         self.worker_thread: Optional[threading.Thread] = None
+
+    def handle_cookie_expired(self, service: str, error_detail: str):
+        """Triggered immediately when a download fails due to expired or revoked cookies."""
+        self.is_paused = True
+        msg = f"🚨 CẢNH BÁO: Cookie {service.upper()} đã hết hạn hoặc bị đăng xuất! Pipeline đã tự động tạm dừng để bảo vệ dữ liệu."
+        self.log(msg, level="error")
+        socketio.emit("cookie_expired_alert", {
+            "service": service,
+            "error": error_detail,
+            "message": msg,
+            "timestamp": time.strftime("%H:%M:%S")
+        })
 
     def log(self, message: str, level: str = "info"):
         """Broadcast log message to connected UI clients."""
@@ -1331,6 +1345,24 @@ def handle_upload_cookie_text(data):
     except Exception as ex:
         logger.error(f"Error saving cookie text: {ex}")
         emit("cookie_saved", {"success": False, "error": str(ex)})
+
+
+@app.route("/api/cookie_health", methods=["GET"])
+def get_cookie_health():
+    """Diagnostic endpoint to inspect active cookies.txt status."""
+    probe = request.args.get("probe", "true").lower() == "true"
+    health_data = CookieHealthChecker.check_health(probe_network=probe)
+    return jsonify(health_data)
+
+
+@socketio.on("check_cookie_status")
+def handle_check_cookie_status(data=None):
+    """WebSocket event to verify cookie health on-demand."""
+    probe = True
+    if isinstance(data, dict):
+        probe = data.get("probe", True)
+    health_data = CookieHealthChecker.check_health(probe_network=probe)
+    emit("cookie_status_result", health_data)
 
 
 # ─── Socket Events For Admin Management & Team Profiles ──────
