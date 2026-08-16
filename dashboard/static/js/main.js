@@ -4284,3 +4284,64 @@ socket.on("track_redownloaded", (data) => {
   console.log("[Settings] Spotify App & Proxy Pool Managers initialized successfully.");
 })();
 
+// ─── Comprehensive System Guide Studio Modal JS ─────────────
+(function initGuideModalManager() {
+  const guideModal = document.getElementById("guide-modal");
+  const cbDontShowAgain = document.getElementById("cb-guide-dont-show-again");
+  const guideTabBtns = document.querySelectorAll(".guide-tab-btn");
+  const guideTabContents = document.querySelectorAll(".guide-tab-content");
+
+  function switchGuideTab(targetTabId) {
+    guideTabBtns.forEach((btn) => {
+      if (btn.getAttribute("data-tab") === targetTabId) {
+        btn.classList.add("btn-primary");
+        btn.classList.remove("btn-secondary");
+      } else {
+        btn.classList.add("btn-secondary");
+        btn.classList.remove("btn-primary");
+      }
+    });
+
+    guideTabContents.forEach((c) => {
+      c.style.display = c.id === targetTabId ? "flex" : "none";
+    });
+  }
+
+  guideTabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.getAttribute("data-tab");
+      if (tab) switchGuideTab(tab);
+    });
+  });
+
+  window.openGuideModal = function(tabId) {
+    if (guideModal) {
+      guideModal.style.display = "flex";
+      if (tabId) {
+        switchGuideTab(tabId);
+      } else {
+        switchGuideTab("guide-tab-overview");
+      }
+    }
+  };
+
+  window.closeGuideModal = function() {
+    if (cbDontShowAgain && cbDontShowAgain.checked) {
+      localStorage.setItem("has_seen_guide_v2", "true");
+    }
+    if (guideModal) guideModal.style.display = "none";
+  };
+
+  // Auto popup on first arrival for new users
+  try {
+    const hasSeen = localStorage.getItem("has_seen_guide_v2");
+    if (!hasSeen) {
+      setTimeout(() => {
+        window.openGuideModal();
+      }, 700);
+    }
+  } catch (e) {
+    console.warn("Guide auto-open check failed:", e);
+  }
+})();
+
