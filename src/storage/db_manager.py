@@ -385,6 +385,46 @@ class DBManager:
             return None
         return self.db.tracks.find_one({"spotify_id": spotify_id}, {"_id": 0})
 
+    def delete_track(self, spotify_id: str) -> bool:
+        """Delete track from MongoDB and remove associated audio/lyrics files from disk."""
+        if not self.is_connected():
+            return False
+        track = self.db.tracks.find_one({"spotify_id": spotify_id})
+        if not track:
+            return False
+
+        # Cleanup files on disk if they exist
+        local_path = track.get("local_path")
+        if local_path:
+            p = settings.BASE_DIR / local_path
+            if p.exists() and p.is_file():
+                try:
+                    p.unlink()
+                except Exception:
+                    pass
+
+        lrc_path = track.get("lrc_path")
+        if lrc_path:
+            p_lrc = settings.BASE_DIR / lrc_path
+            if p_lrc.exists() and p_lrc.is_file():
+                try:
+                    p_lrc.unlink()
+                except Exception:
+                    pass
+
+        res = self.db.tracks.delete_one({"spotify_id": spotify_id})
+        return res.deleted_count > 0
+
+    def delete_tracks_bulk(self, spotify_ids: List[str]) -> int:
+        """Delete multiple tracks from MongoDB and remove associated files."""
+        if not self.is_connected() or not spotify_ids:
+            return 0
+        deleted = 0
+        for sid in spotify_ids:
+            if self.delete_track(sid):
+                deleted += 1
+        return deleted
+
     def get_tracks_by_status(self, status: str, limit: int = 100) -> List[Dict[str, Any]]:
         """Get list of tracks with specific download_status (e.g. 'pending', 'failed')."""
         if not self.is_connected():

@@ -2424,15 +2424,10 @@ if (catalogSelectAll) {
   });
 }
 
-// ─── Reusable Confirmation Modal ────────────────────────────
-const confirmModal = document.getElementById("confirm-modal");
-const confirmModalMessage = document.getElementById("confirm-modal-message");
-const btnCloseConfirmModal = document.getElementById("btn-close-confirm-modal");
-const btnConfirmCancel = document.getElementById("btn-confirm-cancel");
-const btnConfirmProceed = document.getElementById("btn-confirm-proceed");
-let confirmModalCallback = null;
+// ─── Reusable Confirmation Modal (Global System) ────────────
+window.confirmModalCallback = null;
 
-function showConfirmModal(opts, legacyCallback) {
+window.showConfirmModal = function(opts, legacyCallback) {
   let title = "⚠️ Xác Nhận Thao Tác Dữ Liệu";
   let message = "Bạn có chắc chắn muốn thực hiện thao tác này?";
   let proceedText = "Xác Nhận Xóa";
@@ -2450,34 +2445,56 @@ function showConfirmModal(opts, legacyCallback) {
     onConfirm = opts.onConfirm;
   }
 
-  if (!confirmModal) {
+  const modal = document.getElementById("confirm-modal");
+  const msgEl = document.getElementById("confirm-modal-message");
+  const proceedBtn = document.getElementById("btn-confirm-proceed");
+
+  if (!modal) {
     if (window.confirm(message.replace(/<[^>]*>?/gm, ''))) {
       if (typeof onConfirm === "function") onConfirm();
     }
     return;
   }
 
-  if (confirmModalMessage) confirmModalMessage.innerHTML = message;
-  if (btnConfirmProceed) {
-    btnConfirmProceed.textContent = proceedText;
-    btnConfirmProceed.className = isDanger ? "btn btn-danger" : "btn btn-primary";
+  if (msgEl) msgEl.innerHTML = message;
+  if (proceedBtn) {
+    proceedBtn.textContent = proceedText;
+    proceedBtn.className = isDanger ? "btn btn-danger" : "btn btn-primary";
   }
-  confirmModalCallback = onConfirm;
-  confirmModal.style.zIndex = "1000000";
-  confirmModal.style.display = "flex";
-}
-window.showConfirmModal = showConfirmModal;
+  window.confirmModalCallback = onConfirm;
+  modal.style.zIndex = "1000000";
+  modal.style.display = "flex";
+};
 
-if (btnCloseConfirmModal) btnCloseConfirmModal.addEventListener("click", () => (confirmModal.style.display = "none"));
-if (btnConfirmCancel) btnConfirmCancel.addEventListener("click", () => (confirmModal.style.display = "none"));
-if (btnConfirmProceed) {
-  btnConfirmProceed.addEventListener("click", () => {
-    confirmModal.style.display = "none";
-    if (typeof confirmModalCallback === "function") {
-      confirmModalCallback();
+window.executeConfirmModal = function() {
+  const modal = document.getElementById("confirm-modal");
+  if (modal) modal.style.display = "none";
+  if (typeof window.confirmModalCallback === "function") {
+    const cb = window.confirmModalCallback;
+    window.confirmModalCallback = null;
+    try {
+      cb();
+    } catch (err) {
+      console.error("Error executing confirm action:", err);
+      alert("Lỗi thực thi: " + err.message);
     }
-  });
-}
+  }
+};
+
+window.closeConfirmModal = function() {
+  const modal = document.getElementById("confirm-modal");
+  if (modal) modal.style.display = "none";
+  window.confirmModalCallback = null;
+};
+
+const confirmModal = document.getElementById("confirm-modal");
+const btnCloseConfirmModal = document.getElementById("btn-close-confirm-modal");
+const btnConfirmCancel = document.getElementById("btn-confirm-cancel");
+const btnConfirmProceed = document.getElementById("btn-confirm-proceed");
+
+if (btnCloseConfirmModal) btnCloseConfirmModal.addEventListener("click", window.closeConfirmModal);
+if (btnConfirmCancel) btnConfirmCancel.addEventListener("click", window.closeConfirmModal);
+if (btnConfirmProceed) btnConfirmProceed.addEventListener("click", window.executeConfirmModal);
 
 // ─── Bulk Operations (Approve, Flag, Delete) ─────────────────
 function getSelectedCatalogIds() {

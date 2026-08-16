@@ -1646,7 +1646,7 @@
     <div class="modal-container" style="max-width: 460px; border: 1px solid rgba(239, 68, 68, 0.4); box-shadow: 0 25px 60px rgba(0,0,0,0.85);">
       <div class="modal-header" style="background: rgba(239, 68, 68, 0.1);">
         <div class="modal-title text-red">⚠️ Xác Nhận Thao Tác Dữ Liệu</div>
-        <button id="btn-close-confirm-modal" class="modal-close">✕</button>
+        <button id="btn-close-confirm-modal" class="modal-close" onclick="window.closeConfirmModal()">✕</button>
       </div>
       <div class="modal-body flex-col" style="gap: 12px; font-size: 13px;">
         <div id="confirm-modal-message" style="color: var(--text-main); line-height: 1.5;">
@@ -1657,8 +1657,8 @@
         </div>
       </div>
       <div class="modal-footer flex-row" style="justify-content: flex-end; gap: 8px;">
-        <button id="btn-confirm-cancel" class="btn btn-secondary">Hủy Bỏ</button>
-        <button id="btn-confirm-proceed" class="btn btn-danger" style="background: var(--accent-red); border-color: var(--accent-red); color: white; font-weight: 700;">Xác Nhận Xóa</button>
+        <button id="btn-confirm-cancel" class="btn btn-secondary" onclick="window.closeConfirmModal()">Hủy Bỏ</button>
+        <button id="btn-confirm-proceed" class="btn btn-danger" onclick="window.executeConfirmModal()" style="background: var(--accent-red); border-color: var(--accent-red); color: white; font-weight: 700;">Xác Nhận Xóa</button>
       </div>
     </div>
   </div>

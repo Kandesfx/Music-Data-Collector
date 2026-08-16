@@ -1355,6 +1355,48 @@ except Exception:
     pass
 
 
+# ─── Catalog Track REST Endpoints ────────────────────────────
+
+@app.route("/api/tracks/<spotify_id>", methods=["DELETE"])
+def delete_single_track(spotify_id):
+    """Delete a track from MongoDB and disk."""
+    ok = controller.db.delete_track(spotify_id)
+    if ok:
+        controller.log(f"🗑️ Đã xóa bài hát '{spotify_id}' khỏi hệ thống.", level="warning")
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Không tìm thấy bài hát hoặc lỗi xóa"}), 404
+
+
+@app.route("/api/tracks/bulk_delete", methods=["POST"])
+def bulk_delete_tracks():
+    """Delete multiple selected tracks."""
+    data = request.get_json() or {}
+    spotify_ids = data.get("spotify_ids", [])
+    if not spotify_ids:
+        return jsonify({"success": False, "error": "Danh sách bài hát rỗng"}), 400
+
+    deleted = controller.db.delete_tracks_bulk(spotify_ids)
+    controller.log(f"🗑️ Đã xóa hàng loạt {deleted}/{len(spotify_ids)} bài hát khỏi hệ thống.", level="warning")
+    return jsonify({"success": True, "deleted": deleted, "total": len(spotify_ids)})
+
+
+@app.route("/api/tracks/moderate", methods=["POST"])
+def moderate_tracks():
+    """Approve, flag, or reject tracks in bulk."""
+    data = request.get_json() or {}
+    spotify_ids = data.get("spotify_ids", [])
+    status = data.get("status", "approved")
+    if not spotify_ids:
+        return jsonify({"success": False, "error": "Danh sách bài hát rỗng"}), 400
+
+    count = 0
+    for sid in spotify_ids:
+        res = controller.db.db.tracks.update_one({"spotify_id": sid}, {"$set": {"moderation_status": status, "updated_at": datetime.utcnow()}})
+        if res.modified_count > 0:
+            count += 1
+    return jsonify({"success": True, "updated": count, "status": status})
+
+
 # ─── Headless Cookie Pool REST Endpoints ─────────────────────
 
 @app.route("/api/cookies", methods=["GET"])
