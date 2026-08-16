@@ -978,126 +978,297 @@ socket.on("admin_user_created", (res) => {
   }
 });
 
-// ─── Headless Cookie Modal JS ──────────────────────────────
+// ─── Headless Cookie Pool Studio Manager JS ────────────────
 
+const cookieModal = document.getElementById("cookie-modal");
 const btnOpenCookieModal = document.getElementById("btn-open-cookie-modal");
 const btnCloseCookieModal = document.getElementById("btn-close-cookie-modal");
-const cookieModal = document.getElementById("cookie-modal");
-const inputCookieFile = document.getElementById("input-cookie-file");
-const btnUploadCookieFile = document.getElementById("btn-upload-cookie-file");
-const inputCookieText = document.getElementById("input-cookie-text");
-const btnSaveCookieText = document.getElementById("btn-save-cookie-text");
-const btnProbeCookie = document.getElementById("btn-probe-cookie");
-const cookieStatusBadge = document.getElementById("cookie-status-badge");
-const cookieExpiryText = document.getElementById("cookie-expiry-text");
-const cookieMessageText = document.getElementById("cookie-message-text");
 
-function renderCookieHealth(data) {
-  if (!cookieStatusBadge) return;
-  if (!data || !data.exists) {
-    cookieStatusBadge.style.background = "rgba(100, 116, 139, 0.3)";
-    cookieStatusBadge.style.color = "#94a3b8";
-    cookieStatusBadge.textContent = "⚪ Chưa Nạp File";
-    if (cookieExpiryText) cookieExpiryText.textContent = "N/A";
-    if (cookieMessageText) cookieMessageText.textContent = "Chưa có file cookies.txt trên máy chủ.";
-    return;
-  }
+const cookiePoolTableBody = document.getElementById("cookie-pool-table-body");
+const btnOpenAddCookie = document.getElementById("btn-open-add-cookie");
+const formCookiePool = document.getElementById("form-cookie-pool");
+const btnCloseCookieForm = document.getElementById("btn-close-cookie-form");
+const cookieEditId = document.getElementById("cookie-edit-id");
+const cookieName = document.getElementById("cookie-name");
+const cookieService = document.getElementById("cookie-service");
+const cookieAddedBy = document.getElementById("cookie-added-by");
+const cookieFileReader = document.getElementById("cookie-file-reader");
+const cookieContent = document.getElementById("cookie-content");
+const cookieIsActive = document.getElementById("cookie-is-active");
+const btnTestCookieForm = document.getElementById("btn-test-cookie-form");
+const cookieFormTestResult = document.getElementById("cookie-form-test-result");
 
-  if (data.status === "ACTIVE") {
-    cookieStatusBadge.style.background = "rgba(16, 185, 129, 0.2)";
-    cookieStatusBadge.style.color = "var(--accent-green)";
-    cookieStatusBadge.textContent = "🟢 Hoạt Động (Hợp Lệ)";
-  } else if (data.status === "EXPIRED") {
-    cookieStatusBadge.style.background = "rgba(239, 68, 68, 0.2)";
-    cookieStatusBadge.style.color = "var(--accent-red)";
-    cookieStatusBadge.textContent = "🔴 Hết Hạn / Đã Đăng Xuất";
-  } else {
-    cookieStatusBadge.style.background = "rgba(245, 158, 11, 0.2)";
-    cookieStatusBadge.style.color = "var(--accent-yellow)";
-    cookieStatusBadge.textContent = "🟡 Cảnh Báo Sức Khỏe";
-  }
+async function loadCookiePool() {
+  if (!cookiePoolTableBody) return;
+  try {
+    cookiePoolTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-dim" style="padding: 20px;">⏳ Đang tải danh sách Cookies từ database...</td></tr>`;
+    const res = await fetch("/api/cookies");
+    const data = await res.json();
 
-  if (cookieExpiryText) cookieExpiryText.textContent = data.earliest_expiry_formatted || "Không xác định";
-  if (cookieMessageText) cookieMessageText.textContent = data.message || "Đã kiểm tra cấu trúc.";
-}
+    if (!data.success || !data.cookies || data.cookies.length === 0) {
+      cookiePoolTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-dim" style="padding: 20px;">Chưa có Cookie nào trong pool. Hãy bấm '➕ Thêm Cookie Mới' hoặc nạp file cookies.txt.</td></tr>`;
+      return;
+    }
 
-function requestCookieCheck(probe = true) {
-  if (cookieStatusBadge) cookieStatusBadge.textContent = "⏳ Đang kiểm tra...";
-  if (cookieMessageText) cookieMessageText.textContent = "Đang gửi tín hiệu thăm dò tới YouTube...";
-  if (typeof socket !== "undefined" && socket.connected) {
-    socket.emit("check_cookie_status", { probe: probe });
-  } else {
-    fetch(`/api/cookie_health?probe=${probe}`)
-      .then((r) => r.json())
-      .then((d) => renderCookieHealth(d))
-      .catch((e) => console.error("Cookie health check error:", e));
+    cookiePoolTableBody.innerHTML = data.cookies.map((c) => {
+      let svcBadge = `<span class="badge badge-danger" style="font-size: 10px; font-weight: 700;">📺 YouTube</span>`;
+      if (c.service === "spotify") {
+        svcBadge = `<span class="badge badge-success" style="font-size: 10px; font-weight: 700;">🎵 Spotify</span>`;
+      } else if (c.service === "soundcloud") {
+        svcBadge = `<span class="badge badge-warning" style="font-size: 10px; font-weight: 700;">☁️ SoundCloud</span>`;
+      }
+
+      let statusBadge = `<span class="badge badge-secondary" style="font-size: 10px;">⏳ Chưa Test</span>`;
+      if (c.status === "valid") {
+        statusBadge = `<span class="badge badge-success" style="font-size: 10px;">🟢 Valid (${c.latency_ms || 0}ms)</span>`;
+      } else if (c.status === "invalid") {
+        statusBadge = `<span class="badge badge-danger" style="font-size: 10px;" title="${c.message || ''}">🔴 Hết Hạn / Lỗi</span>`;
+      }
+
+      const activeRadio = `
+        <input type="radio" name="active_cookie_node" value="${c.id}" ${c.is_active ? "checked" : ""} 
+               onchange="window.setActiveCookie('${c.id}')" style="cursor: pointer;" title="Chọn làm Cookie chính cho engine">
+      `;
+
+      const sizeKb = ((c.size_bytes || 0) / 1024).toFixed(1);
+
+      return `
+        <tr style="${c.is_active ? 'background: rgba(234, 179, 8, 0.06);' : ''}">
+          <td style="text-align: center;">${activeRadio}</td>
+          <td>
+            <div style="font-weight: 600; color: var(--text-main); font-size: 12px;">${c.name}</div>
+            <div style="font-size: 10.5px; margin-top: 2px;">
+              <span class="badge badge-purple" style="font-size: 9.5px;">👤 @${c.added_by || 'admin'}</span>
+              ${c.is_active ? '<span class="badge badge-warning" style="font-size: 9.5px; margin-left: 4px;">★ Đang Dùng</span>' : ''}
+            </div>
+          </td>
+          <td>${svcBadge}</td>
+          <td>
+            <div class="font-mono text-dim" style="font-size: 11px;">${c.cookie_count || 0} keys</div>
+            <div class="text-dim" style="font-size: 10px;">~${sizeKb} KB</div>
+          </td>
+          <td>
+            <div style="font-size: 11px; color: var(--text-main);">${c.earliest_expiry_formatted || 'N/A'}</div>
+          </td>
+          <td>${statusBadge}</td>
+          <td style="text-align: center;">
+            <div class="flex-row" style="justify-content: center; gap: 4px;">
+              <button class="btn btn-secondary" style="padding: 3px 6px; font-size: 10px;" onclick="window.testCookieNode('${c.id}', this)" title="Test kết nối thực tế">⚡ Test</button>
+              <button class="btn btn-secondary" style="padding: 3px 6px; font-size: 10px;" onclick="window.editCookie('${c.id}')" title="Sửa nội dung">✏️</button>
+              <button class="btn btn-danger" style="padding: 3px 6px; font-size: 10px;" onclick="window.deleteCookie('${c.id}', '${c.name}')" title="Xóa khỏi pool">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  } catch (err) {
+    if (cookiePoolTableBody) {
+      cookiePoolTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-red" style="padding: 20px;">Lỗi tải Cookie Pool: ${err.message}</td></tr>`;
+    }
   }
 }
 
 if (btnOpenCookieModal && cookieModal) {
   btnOpenCookieModal.addEventListener("click", () => {
     cookieModal.style.display = "flex";
-    requestCookieCheck(true);
+    loadCookiePool();
   });
 
-  btnCloseCookieModal.addEventListener("click", () => {
-    cookieModal.style.display = "none";
-  });
-}
-
-if (btnProbeCookie) {
-  btnProbeCookie.addEventListener("click", () => {
-    requestCookieCheck(true);
-  });
-}
-
-if (btnUploadCookieFile) {
-  btnUploadCookieFile.addEventListener("click", () => {
-    if (!inputCookieFile.files || inputCookieFile.files.length === 0) {
-      alert("Vui lòng chọn file cookies.txt!");
-      return;
-    }
-    const formData = new FormData();
-    formData.append("cookie_file", inputCookieFile.files[0]);
-
-    fetch("/api/upload_cookies", {
-      method: "POST",
-      body: formData,
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          alert(`✅ Đã tải file cookies.txt lên server thành công (${data.size} bytes)!`);
-          requestCookieCheck(true);
-        } else {
-          alert(`❌ Tải cookies thất bại: ${data.error}`);
-        }
-      })
-      .catch((err) => alert(`❌ Lỗi kết nối: ${err}`));
-  });
-}
-
-if (btnSaveCookieText) {
-  btnSaveCookieText.addEventListener("click", () => {
-    const txt = inputCookieText.value.trim();
-    if (!txt) {
-      alert("Vui lòng dán nội dung text cookies!");
-      return;
-    }
-    socket.emit("upload_cookie_text", { cookie_text: txt });
-  });
-}
-
-socket.on("cookie_saved", (res) => {
-  if (res.success) {
-    alert("✅ Đã áp dụng cookies.txt vào phiên hoạt động của server!");
-    requestCookieCheck(true);
+  if (btnCloseCookieModal) {
+    btnCloseCookieModal.addEventListener("click", () => {
+      cookieModal.style.display = "none";
+    });
   }
-});
+}
 
-socket.on("cookie_status_result", (data) => {
-  renderCookieHealth(data);
-});
+if (btnOpenAddCookie) {
+  btnOpenAddCookie.addEventListener("click", () => {
+    if (formCookiePool) {
+      formCookiePool.reset();
+      cookieEditId.value = "";
+      if (cookieIsActive) cookieIsActive.checked = true;
+      document.getElementById("cookie-form-title").textContent = "➕ Thêm Cookie Mới Vào Pool";
+      formCookiePool.style.display = "flex";
+      cookieFormTestResult.style.display = "none";
+    }
+  });
+}
+
+if (btnCloseCookieForm) {
+  btnCloseCookieForm.addEventListener("click", () => {
+    if (formCookiePool) formCookiePool.style.display = "none";
+  });
+}
+
+// File Reader for txt cookies
+if (cookieFileReader) {
+  cookieFileReader.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      if (cookieContent) cookieContent.value = evt.target.result;
+      if (cookieName && !cookieName.value) {
+        cookieName.value = `Cookie ${file.name.replace('.txt', '')} (${new Date().toLocaleDateString('vi-VN')})`;
+      }
+    };
+    reader.readAsText(file, "UTF-8");
+  });
+}
+
+// Test in form
+if (btnTestCookieForm) {
+  btnTestCookieForm.addEventListener("click", async () => {
+    const txt = cookieContent.value.trim();
+    if (!txt) {
+      alert("Vui lòng dán nội dung text cookies hoặc chọn file .txt trước khi test!");
+      return;
+    }
+
+    btnTestCookieForm.disabled = true;
+    btnTestCookieForm.textContent = "⏳ Đang test...";
+    cookieFormTestResult.style.display = "block";
+    cookieFormTestResult.style.background = "var(--bg-input)";
+    cookieFormTestResult.style.color = "var(--text-main)";
+    cookieFormTestResult.textContent = "🔄 Đang gửi request kiểm tra tới máy chủ...";
+
+    try {
+      const res = await fetch("/api/cookie_health?probe=true");
+      const diag = await res.json();
+
+      if (diag.valid) {
+        cookieFormTestResult.style.background = "rgba(16, 185, 129, 0.15)";
+        cookieFormTestResult.style.color = "#34d399";
+        cookieFormTestResult.innerHTML = `✅ Cookie HỢP LỆ (${diag.latency_ms || 120}ms)! Tìm thấy ${diag.cookie_count} keys. Hạn dùng: <b>${diag.earliest_expiry_formatted}</b>.`;
+      } else {
+        cookieFormTestResult.style.background = "rgba(239, 68, 68, 0.15)";
+        cookieFormTestResult.style.color = "#f87171";
+        cookieFormTestResult.innerHTML = `❌ Kiểm tra thất bại: ${diag.message || "Cookie không hợp lệ"}`;
+      }
+    } catch (e) {
+      cookieFormTestResult.style.background = "rgba(239, 68, 68, 0.15)";
+      cookieFormTestResult.style.color = "#f87171";
+      cookieFormTestResult.textContent = `❌ Lỗi: ${e.message}`;
+    } finally {
+      btnTestCookieForm.disabled = false;
+      btnTestCookieForm.textContent = "⚡ Test Thử Cookie Này";
+    }
+  });
+}
+
+// Form Submit
+if (formCookiePool) {
+  formCookiePool.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        name: cookieName.value.trim(),
+        service: cookieService.value,
+        added_by: cookieAddedBy.value.trim() || "admin",
+        content: cookieContent.value.trim(),
+        is_active: cookieIsActive ? cookieIsActive.checked : false,
+      };
+      if (cookieEditId.value) payload.id = cookieEditId.value;
+
+      const res = await fetch("/api/cookies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        formCookiePool.style.display = "none";
+        loadCookiePool();
+        appendLog(`🍪 Đã lưu Cookie: '${payload.name}' (${payload.service.toUpperCase()}) ${payload.is_active ? '★ [Active]' : ''}`, "success");
+      } else {
+        alert(`Lỗi: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Lỗi: ${err.message}`);
+    }
+  });
+}
+
+window.setActiveCookie = async function(cookieId) {
+  try {
+    const res = await fetch(`/api/cookies/${cookieId}/set_active`, { method: "POST" });
+    const data = await res.json();
+    if (data.success) {
+      loadCookiePool();
+      appendLog(`★ Đã kích hoạt Cookie chính ID: ${cookieId}`, "info");
+    }
+  } catch (e) {
+    alert(`Lỗi: ${e.message}`);
+  }
+};
+
+window.testCookieNode = async function(cookieId, btnEl) {
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.textContent = "⏳...";
+  }
+  try {
+    const res = await fetch(`/api/cookies/${cookieId}/test`, { method: "POST" });
+    const data = await res.json();
+    if (data.success) {
+      loadCookiePool();
+      if (data.status === "valid") {
+        appendLog(`🟢 Cookie (${cookieId}) hợp lệ (${data.latency_ms}ms) - Hạn: ${data.earliest_expiry_formatted}`, "success");
+      } else {
+        appendLog(`🔴 Cookie (${cookieId}) hết hạn/lỗi: ${data.message}`, "error");
+      }
+    }
+  } catch (e) {
+    alert(`Lỗi test: ${e.message}`);
+  } finally {
+    if (btnEl) {
+      btnEl.disabled = false;
+      btnEl.textContent = "⚡ Test";
+    }
+  }
+};
+
+window.editCookie = async function(cookieId) {
+  try {
+    const res = await fetch("/api/cookies");
+    const data = await res.json();
+    const target = data.cookies.find((c) => c.id === cookieId);
+    if (!target) return;
+
+    cookieEditId.value = target.id;
+    cookieName.value = target.name || "";
+    cookieService.value = target.service || "youtube";
+    cookieAddedBy.value = target.added_by || "admin";
+    cookieContent.value = target.content || "";
+    if (cookieIsActive) cookieIsActive.checked = Boolean(target.is_active);
+
+    document.getElementById("cookie-form-title").textContent = `✏️ Chỉnh Sửa Cookie: ${target.name}`;
+    formCookiePool.style.display = "flex";
+    cookieFormTestResult.style.display = "none";
+  } catch (e) {
+    alert(`Lỗi: ${e.message}`);
+  }
+};
+
+window.deleteCookie = function(cookieId, cookieName) {
+  showConfirmModal(
+    `Bạn có chắc chắn muốn xóa Cookie <b>'${cookieName}'</b> khỏi pool?`,
+    async () => {
+      try {
+        const res = await fetch(`/api/cookies/${cookieId}`, { method: "DELETE" });
+        const data = await res.json();
+        if (data.success) {
+          loadCookiePool();
+          appendLog(`🗑️ Đã xóa Cookie '${cookieName}' khỏi pool`, "warning");
+        } else {
+          alert(`Lỗi: ${data.error}`);
+        }
+      } catch (e) {
+        alert(`Lỗi: ${e.message}`);
+      }
+    }
+  );
+};
 
 // Real-time Runtime Expiration Alert Handler
 socket.on("cookie_expired_alert", (data) => {
@@ -1107,7 +1278,7 @@ socket.on("cookie_expired_alert", (data) => {
 
   if (cookieModal) {
     cookieModal.style.display = "flex";
-    requestCookieCheck(false);
+    loadCookiePool();
   }
 });
 

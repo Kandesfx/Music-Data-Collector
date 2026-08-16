@@ -1319,32 +1319,112 @@ def upload_cookies():
     return jsonify({"success": True, "size": target_path.stat().st_size})
 
 
-@socketio.on("upload_cookie_text")
-def handle_upload_cookie_text(data):
-    """Save raw cookies text from textarea into config/cookies.txt."""
+def sync_active_cookie_to_disk():
+    """Sync current active cookie from MongoDB to config/cookies.txt runtime files."""
     try:
-        raw_text = data.get("cookie_text", "").strip()
-        if not raw_text:
-            emit("cookie_saved", {"success": False, "error": "Cookie content is empty!"})
-            return
-
-        target_path = settings.CONFIG_DIR / "cookies.txt"
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(target_path, "w", encoding="utf-8") as f:
-            f.write(raw_text)
-
-        data_cookie = settings.DATA_DIR / "cookies.txt"
-        data_cookie.parent.mkdir(parents=True, exist_ok=True)
-        with open(data_cookie, "w", encoding="utf-8") as f:
-            f.write(raw_text)
-
-        settings.COOKIES_FILE = target_path
-        controller.dm.cookies_path = target_path
-        controller.log(f"🍪 Applied raw YouTube cookies.txt ({len(raw_text)} chars). Server authenticated.", level="success")
-        emit("cookie_saved", {"success": True, "size": len(raw_text)})
+        active_c = controller.db.get_active_cookie(service="youtube")
+        if active_c and active_c.get("content"):
+            content = active_c["content"].strip()
+            for p in [settings.CONFIG_DIR / "cookies.txt", settings.DATA_DIR / "cookies.txt"]:
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(content, encoding="utf-8")
+            settings.COOKIES_FILE = settings.CONFIG_DIR / "cookies.txt"
+            controller.dm.cookies_path = settings.CONFIG_DIR / "cookies.txt"
+            logger.info(f"🍪 Synced active YouTube cookie '{active_c.get('name')}' to disk.")
     except Exception as ex:
-        logger.error(f"Error saving cookie text: {ex}")
-        emit("cookie_saved", {"success": False, "error": str(ex)})
+        logger.error(f"Error syncing active cookie to disk: {ex}")
+
+
+# Initialize active cookie on startup
+try:
+    sync_active_cookie_to_disk()
+except Exception:
+    pass
+
+
+# ─── Headless Cookie Pool REST Endpoints ─────────────────────
+
+@app.route("/api/cookies", methods=["GET"])
+def list_cookies_endpoint():
+    """Retrieve all cookies stored in the MongoDB pool."""
+    cookies = controller.db.get_all_cookies()
+    return jsonify({"success": True, "cookies": cookies})
+
+
+@app.route("/api/cookies", methods=["POST"])
+def save_cookie_endpoint():
+    """Create or update a cookie document in MongoDB pool."""
+    data = request.get_json() or {}
+    raw_content = data.get("content", "").strip()
+    if not raw_content:
+        return jsonify({"success": False, "error": "Nội dung Cookie không được để trống!"}), 400
+
+    # Parse and probe health automatically
+    diag = CookieHealthChecker.check_health(raw_text=raw_content, probe_network=False)
+    data["cookie_count"] = diag.get("cookie_count", 0)
+    data["earliest_expiry_formatted"] = diag.get("earliest_expiry_formatted", "N/A")
+    data["status"] = "valid" if diag.get("valid") else "untested"
+    data["message"] = diag.get("message", "Đã lưu vào Database.")
+
+    ok = controller.db.upsert_cookie(data)
+    if ok:
+        if data.get("is_active"):
+            sync_active_cookie_to_disk()
+        controller.log(f"🍪 Đã lưu Cookie '{data.get('name', 'Node')}' vào MongoDB pool.", level="success")
+        return jsonify({"success": True, "cookie": data})
+    return jsonify({"success": False, "error": "Lỗi lưu Cookie vào MongoDB"}), 500
+
+
+@app.route("/api/cookies/<cookie_id>", methods=["DELETE"])
+def delete_cookie_endpoint(cookie_id):
+    """Delete a cookie from MongoDB pool."""
+    ok = controller.db.delete_cookie(cookie_id)
+    if ok:
+        controller.log(f"🗑️ Đã xóa Cookie '{cookie_id}' khỏi MongoDB pool.", level="warning")
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Không thể xóa Cookie"}), 404
+
+
+@app.route("/api/cookies/<cookie_id>/set_active", methods=["POST"])
+def set_active_cookie_endpoint(cookie_id):
+    """Set cookie as the active runtime node."""
+    ok = controller.db.set_active_cookie(cookie_id)
+    if ok:
+        sync_active_cookie_to_disk()
+        c_doc = controller.db.get_cookie(cookie_id)
+        c_name = c_doc.get("name", cookie_id) if c_doc else cookie_id
+        controller.log(f"★ Đã chuyển Cookie chính sang: '{c_name}'", level="info")
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Không thể kích hoạt Cookie"}), 400
+
+
+@app.route("/api/cookies/<cookie_id>/test", methods=["POST"])
+def test_cookie_endpoint(cookie_id):
+    """Perform live probe test against YouTube for a specific cookie in the pool."""
+    c_doc = controller.db.get_cookie(cookie_id)
+    if not c_doc:
+        return jsonify({"success": False, "error": "Cookie không tồn tại"}), 404
+
+    content = c_doc.get("content", "")
+    diag = CookieHealthChecker.check_health(raw_text=content, probe_network=True)
+    status_label = "valid" if diag.get("valid") else "invalid"
+    controller.db.update_cookie_status(
+        cookie_id=cookie_id,
+        status=status_label,
+        latency_ms=diag.get("latency_ms", 0),
+        cookie_count=diag.get("cookie_count", 0),
+        earliest_expiry_formatted=diag.get("earliest_expiry_formatted", "N/A"),
+        message=diag.get("message", ""),
+    )
+    return jsonify({
+        "success": True,
+        "status": status_label,
+        "latency_ms": diag.get("latency_ms", 0),
+        "cookie_count": diag.get("cookie_count", 0),
+        "earliest_expiry_formatted": diag.get("earliest_expiry_formatted", "N/A"),
+        "message": diag.get("message", ""),
+        "account_logged_in": diag.get("account_logged_in", False),
+    })
 
 
 @app.route("/api/cookie_health", methods=["GET"])

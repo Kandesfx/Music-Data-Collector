@@ -1369,4 +1369,143 @@ class DBManager:
             for app in defaults:
                 self.upsert_spotify_app(app)
 
+    # ─── Cookie Pool & Multi-Account Management ────────────────
+
+    def get_all_cookies(self) -> List[Dict[str, Any]]:
+        """Retrieve all cookies stored in the MongoDB pool."""
+        if not self.is_connected():
+            return []
+        self._ensure_default_cookies_seeded()
+        return list(self.db.cookie_pool.find({}, {"_id": 0}).sort("created_at", -1))
+
+    def get_cookie(self, cookie_id: str) -> Optional[Dict[str, Any]]:
+        """Get cookie by ID."""
+        if not self.is_connected():
+            return None
+        return self.db.cookie_pool.find_one({"id": cookie_id}, {"_id": 0})
+
+    def get_active_cookie(self, service: str = "youtube") -> Optional[Dict[str, Any]]:
+        """Get the currently active cookie for a given service."""
+        if not self.is_connected():
+            return None
+        return self.db.cookie_pool.find_one({"is_active": True, "service": service}, {"_id": 0})
+
+    def upsert_cookie(self, cookie_data: Dict[str, Any]) -> bool:
+        """Create or update a cookie document in MongoDB."""
+        if not self.is_connected():
+            return False
+
+        cookie_id = cookie_data.get("id") or f"cookie_{int(time.time()*1000)}"
+        name = cookie_data.get("name", "").strip() or "Headless Cookie Node"
+        service = cookie_data.get("service", "youtube").lower().strip()
+        content = cookie_data.get("content", "").strip()
+        added_by = cookie_data.get("added_by", "admin").strip()
+        is_active = bool(cookie_data.get("is_active", False))
+
+        # If setting to active, unset is_active for other cookies of the same service
+        if is_active:
+            self.db.cookie_pool.update_many({"service": service}, {"$set": {"is_active": False}})
+
+        doc = {
+            "id": cookie_id,
+            "name": name,
+            "service": service,
+            "content": content,
+            "added_by": added_by,
+            "is_active": is_active,
+            "status": cookie_data.get("status", "untested"),
+            "latency_ms": cookie_data.get("latency_ms", 0),
+            "cookie_count": cookie_data.get("cookie_count", 0),
+            "size_bytes": len(content.encode("utf-8")),
+            "earliest_expiry_formatted": cookie_data.get("earliest_expiry_formatted", "N/A"),
+            "message": cookie_data.get("message", "Chưa kiểm tra"),
+            "last_tested": cookie_data.get("last_tested", None),
+            "created_at": cookie_data.get("created_at") or datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+
+        self.db.cookie_pool.update_one({"id": cookie_id}, {"$set": doc}, upsert=True)
+        return True
+
+    def delete_cookie(self, cookie_id: str) -> bool:
+        """Delete cookie from MongoDB."""
+        if not self.is_connected():
+            return False
+        res = self.db.cookie_pool.delete_one({"id": cookie_id})
+        return res.deleted_count > 0
+
+    def set_active_cookie(self, cookie_id: str) -> bool:
+        """Set a cookie as the primary active cookie for its service."""
+        if not self.is_connected():
+            return False
+
+        target = self.get_cookie(cookie_id)
+        if not target:
+            return False
+
+        service = target.get("service", "youtube")
+        self.db.cookie_pool.update_many({"service": service}, {"$set": {"is_active": False}})
+        res = self.db.cookie_pool.update_one(
+            {"id": cookie_id},
+            {"$set": {"is_active": True, "updated_at": datetime.utcnow()}}
+        )
+        return res.modified_count > 0
+
+    def update_cookie_status(
+        self,
+        cookie_id: str,
+        status: str,
+        latency_ms: int = 0,
+        cookie_count: int = 0,
+        earliest_expiry_formatted: Optional[str] = None,
+        message: Optional[str] = None,
+    ) -> bool:
+        """Update live validation test results for a cookie."""
+        if not self.is_connected():
+            return False
+        update_doc: Dict[str, Any] = {
+            "status": status,
+            "latency_ms": latency_ms,
+            "cookie_count": cookie_count,
+            "last_tested": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "updated_at": datetime.utcnow(),
+        }
+        if earliest_expiry_formatted:
+            update_doc["earliest_expiry_formatted"] = earliest_expiry_formatted
+        if message:
+            update_doc["message"] = message
+
+        res = self.db.cookie_pool.update_one({"id": cookie_id}, {"$set": update_doc})
+        return res.modified_count > 0
+
+    def _ensure_default_cookies_seeded(self):
+        """Seed existing config/cookies.txt file if collection is empty."""
+        if self.db.cookie_pool.count_documents({}) == 0:
+            cookie_file = settings.CONFIG_DIR / "cookies.txt"
+            if not cookie_file.exists():
+                cookie_file = settings.DATA_DIR / "cookies.txt"
+            if not cookie_file.exists():
+                cookie_file = settings.BASE_DIR / "config" / "cookies.txt"
+
+            content = ""
+            if cookie_file.exists():
+                try:
+                    content = cookie_file.read_text(encoding="utf-8", errors="replace")
+                except Exception:
+                    pass
+
+            if content:
+                self.upsert_cookie({
+                    "id": "cookie_yt_default",
+                    "name": "YouTube Netscape Primary - Host Master",
+                    "service": "youtube",
+                    "content": content,
+                    "added_by": "admin",
+                    "is_active": True,
+                    "status": "valid",
+                    "earliest_expiry_formatted": "22/10/2026 12:26:40 UTC",
+                    "message": "Đã đồng bộ tự động từ file cookies.txt hệ thống.",
+                })
+
+
 

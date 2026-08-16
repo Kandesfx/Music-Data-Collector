@@ -97,12 +97,28 @@ class CookieHealthChecker:
         return cookies_list, cookies_dict, earliest_expiry
 
     @classmethod
-    def check_health(cls, custom_path: Optional[Path] = None, probe_network: bool = True) -> Dict[str, Any]:
+    def check_health(
+        cls,
+        custom_path: Optional[Path] = None,
+        raw_text: Optional[str] = None,
+        probe_network: bool = True
+    ) -> Dict[str, Any]:
         """
-        Perform complete diagnostic on the active cookies.txt file.
+        Perform complete diagnostic on a cookies.txt file or raw cookie text.
         """
-        cookie_path = cls.resolve_cookie_path(custom_path)
-        if not cookie_path:
+        temp_file = None
+        start_t = time.perf_counter()
+
+        if raw_text and raw_text.strip():
+            temp_dir = settings.DATA_DIR / "temp"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            temp_file = temp_dir / f"cookie_probe_{int(time.time()*1000)}.txt"
+            temp_file.write_text(raw_text.strip(), encoding="utf-8")
+            cookie_path = temp_file
+        else:
+            cookie_path = cls.resolve_cookie_path(custom_path)
+
+        if not cookie_path or not cookie_path.exists():
             return {
                 "exists": False,
                 "valid": False,
@@ -113,6 +129,7 @@ class CookieHealthChecker:
                 "account_logged_in": False,
                 "earliest_expiry": None,
                 "earliest_expiry_formatted": "N/A",
+                "latency_ms": 0,
                 "path": None,
             }
 
@@ -120,16 +137,22 @@ class CookieHealthChecker:
         cookies_list, cookies_dict, earliest_expiry = cls.parse_cookie_file(cookie_path)
 
         if not cookies_list:
+            if temp_file and temp_file.exists():
+                try:
+                    temp_file.unlink()
+                except Exception:
+                    pass
             return {
                 "exists": True,
                 "valid": False,
                 "status": "EMPTY_OR_INVALID",
-                "message": "File cookies.txt bị rỗng hoặc không đúng định dạng Netscape.",
+                "message": "File cookies bị rỗng hoặc không đúng định dạng Netscape.",
                 "cookie_count": 0,
                 "size_bytes": file_size,
                 "account_logged_in": False,
                 "earliest_expiry": None,
                 "earliest_expiry_formatted": "N/A",
+                "latency_ms": 0,
                 "path": str(cookie_path),
             }
 
@@ -176,6 +199,15 @@ class CookieHealthChecker:
                     probe_success = True
                     probe_msg = f"Cookie nạp thành công (Kiểm tra nhanh: {err_str[:60]})."
 
+        latency_ms = int((time.perf_counter() - start_t) * 1000)
+
+        # Cleanup temporary probe file
+        if temp_file and temp_file.exists():
+            try:
+                temp_file.unlink()
+            except Exception:
+                pass
+
         status_label = "ACTIVE" if (has_login and probe_success) else ("EXPIRED" if not probe_success else "WARNING")
 
         return {
@@ -189,5 +221,6 @@ class CookieHealthChecker:
             "account_logged_in": has_login,
             "earliest_expiry": earliest_expiry,
             "earliest_expiry_formatted": expiry_str,
+            "latency_ms": max(1, latency_ms),
             "path": str(cookie_path),
         }

@@ -1424,49 +1424,111 @@
     </div>
   </div>
 
-  <!-- Modal 6: Headless Cookie Configuration Modal -->
+  <!-- Modal 6: Headless Cookie Pool Management Modal -->
   <div id="cookie-modal" class="modal-overlay">
-    <div class="modal-container medium">
+    <div class="modal-container large" style="max-height: 92vh;">
       <div class="modal-header">
-        <div class="modal-title text-yellow">🍪 Cấu Hình & Giám Sát Sức Khỏe Cookies Headless</div>
+        <div class="modal-title text-yellow">
+          🍪 Quản Trị Headless Cookie Pool (YouTube / Spotify)
+        </div>
         <button id="btn-close-cookie-modal" class="modal-close">✕</button>
       </div>
-      <div class="modal-body flex-col">
-        <!-- Live Cookie Health Diagnostic Card -->
-        <div id="cookie-health-card" style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: var(--radius-md); padding: 12px; margin-bottom: 10px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <span style="font-weight: 600; font-size: 13px;">Trạng Thái Cookie Hiện Tại:</span>
-            <span id="cookie-status-badge" class="badge" style="background: rgba(100, 116, 139, 0.2); color: #94a3b8; font-size: 11px; padding: 3px 8px;">Đang kiểm tra...</span>
+      <div class="modal-body flex-col" style="gap: 12px;">
+        <div class="flex-between">
+          <div>
+            <div style="font-weight: 700; color: var(--accent-yellow); font-size: 13px;">
+              🛡️ Kho Lưu Trữ Cookies Headless Đa Tài Khoản
+            </div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">
+              Lưu vĩnh viễn trên MongoDB, hỗ trợ nhiều tài khoản, đo độ trễ, tự động đồng bộ khi tải MP3 320k
+            </div>
           </div>
-          <div id="cookie-health-details" style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5;">
-            <div>• <b>Hạn sử dụng:</b> <span id="cookie-expiry-text">Đang tải...</span></div>
-            <div>• <b>Chi tiết:</b> <span id="cookie-message-text">Đang kiểm tra kết nối...</span></div>
-          </div>
-          <div style="margin-top: 10px; display: flex; gap: 8px;">
-            <button id="btn-probe-cookie" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;">🔍 Kiểm Tra Sức Khỏe Ngay</button>
-          </div>
-        </div>
-
-        <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); padding: 8px 12px; border-radius: var(--radius-md); font-size: 11.5px;">
-          <b>💡 Cookies giải quyết triệt để Bot Detection / 429 Rate Limit:</b> Tải file Netscape <code>cookies.txt</code> hoặc dán trực tiếp.
-        </div>
-
-        <div class="form-group" style="margin-top: 10px;">
-          <label class="form-label">Tải lên file cookies.txt:</label>
-          <div class="flex-row">
-            <input type="file" id="input-cookie-file" accept=".txt" class="input-field" style="padding: 4px;">
-            <button id="btn-upload-cookie-file" class="btn btn-primary">Tải Lên</button>
+          <div class="flex-row" style="gap: 6px; width: auto;">
+            <button id="btn-open-add-cookie" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">
+              ➕ Thêm Cookie Mới
+            </button>
           </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Hoặc Dán Nội Dung Text Cookies (Netscape format):</label>
-          <textarea id="input-cookie-text" class="input-field font-mono" style="height: 110px; font-size: 11px;" placeholder="# Netscape HTTP Cookie File&#10;.youtube.com TRUE / FALSE 1780000000 ..."></textarea>
+        <!-- Form Thêm / Sửa Cookie -->
+        <form id="form-cookie-pool" class="flex-col" style="display: none; background: rgba(0,0,0,0.35); border: 1px solid var(--accent-yellow); border-radius: var(--radius-md); padding: 12px; gap: 8px;">
+          <input type="hidden" id="cookie-edit-id" value="">
+          <div class="flex-between">
+            <span id="cookie-form-title" style="font-weight: 700; color: var(--accent-yellow); font-size: 12px;">➕ Thêm Cookie Mới Vào Pool</span>
+            <button type="button" id="btn-close-cookie-form" class="btn btn-secondary" style="padding: 2px 6px; font-size: 10px;">✕ Đóng</button>
+          </div>
+
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">Tên Ghi Chú Cookie (*):</label>
+              <input type="text" id="cookie-name" class="input-field" placeholder="Ví dụ: YouTube Premium - Nguyễn Văn A" required>
+            </div>
+            <div class="flex-row" style="gap: 8px;">
+              <div class="form-group" style="flex: 1;">
+                <label class="form-label">Dịch Vụ (*):</label>
+                <select id="cookie-service" class="input-field">
+                  <option value="youtube" selected>YouTube (320k Audio &amp; Video)</option>
+                  <option value="spotify">Spotify Web Player</option>
+                  <option value="soundcloud">SoundCloud</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label class="form-label">Người Nạp (Owner):</label>
+                <input type="text" id="cookie-added-by" class="input-field" placeholder="admin" value="admin" required>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="flex-between" style="margin-bottom: 4px;">
+              <label class="form-label" style="margin-bottom: 0;">Nội Dung Netscape cookies.txt (*):</label>
+              <label class="btn btn-secondary" style="padding: 2px 8px; font-size: 10.5px; cursor: pointer; border-color: var(--accent-cyan); color: var(--accent-cyan);">
+                📁 Nạp Từ File .txt
+                <input type="file" id="cookie-file-reader" accept=".txt" style="display: none;">
+              </label>
+            </div>
+            <textarea id="cookie-content" class="input-field font-mono" style="height: 110px; font-size: 11px;" placeholder="# Netscape HTTP Cookie File&#10;.youtube.com&#9;TRUE&#9;/&#9;TRUE&#9;1821425274&#9;SID&#9;...&#10;.youtube.com&#9;TRUE&#9;/&#9;TRUE&#9;1821425274&#9;LOGIN_INFO&#9;..." required></textarea>
+          </div>
+
+          <div class="flex-row" style="background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.25); border-radius: var(--radius-sm); padding: 8px 10px;">
+            <label class="flex-row" style="gap: 8px; align-items: center; cursor: pointer; width: 100%;">
+              <input type="checkbox" id="cookie-is-active" style="width: 16px; height: 16px; cursor: pointer;" checked>
+              <span style="font-size: 11.5px; font-weight: 700; color: #facc15;">★ Đặt làm Cookie chính (Active) cho engine tải ngay sau khi lưu</span>
+            </label>
+          </div>
+
+          <div class="flex-row" style="justify-content: flex-end; gap: 6px; margin-top: 4px;">
+            <button type="button" id="btn-test-cookie-form" class="btn btn-secondary">⚡ Test Thử Cookie Này</button>
+            <button type="submit" id="btn-save-cookie-pool" class="btn btn-primary">💾 Lưu Vào Database</button>
+          </div>
+          <div id="cookie-form-test-result" style="display: none; padding: 6px 10px; border-radius: var(--radius-sm); font-size: 11px;"></div>
+        </form>
+
+        <!-- Cookies Table -->
+        <div class="table-responsive" style="max-height: 380px; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">Dùng</th>
+                <th>Tên Cookie &amp; Người Nạp</th>
+                <th style="width: 110px;">Dịch Vụ</th>
+                <th style="width: 120px;">Dung Lượng</th>
+                <th style="width: 160px;">Hạn Sử Dụng</th>
+                <th style="width: 140px;">Trạng Thái &amp; Ping</th>
+                <th style="width: 140px; text-align: center;">Hành Động</th>
+              </tr>
+            </thead>
+            <tbody id="cookie-pool-table-body">
+              <tr><td colspan="7" class="text-center text-dim" style="padding: 20px;">⏳ Đang tải danh sách Cookies từ database...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
-      <div class="modal-footer" style="display: flex; justify-content: space-between;">
-        <span style="font-size: 11px; color: var(--text-muted); align-self: center;">Tự động tạm dừng pipeline khi hết hạn</span>
-        <button id="btn-save-cookie-text" class="btn btn-primary">💾 Áp Dụng Cookies</button>
+      <div class="modal-footer flex-between">
+        <span style="font-size: 11px; color: var(--text-muted);">
+          💡 Cookie lưu vĩnh viễn trên MongoDB, tự động tạm dừng pipeline khi phát hiện hết hạn.
+        </span>
+        <button class="btn btn-secondary" onclick="document.getElementById('cookie-modal').style.display='none'">Đóng</button>
       </div>
     </div>
   </div>
