@@ -28,6 +28,8 @@ wheels/
 .env
 .env.local
 config/.env
+config/cookies.txt
+data/cookies.txt
 *.pem
 *.key
 *.ppk
