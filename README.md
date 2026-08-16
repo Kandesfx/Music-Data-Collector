@@ -3,6 +3,9 @@
 > **Công cụ Thu thập & Xử lý Dữ liệu Âm nhạc Tự động Chuẩn Phòng Thu (Spotify + YTMusic Precision + LRCLIB + 320k MP3 + Dashboard UI)**  
 > Phục vụ cho Đồ Án Tốt Nghiệp: *Xây dựng Hệ Thống Nghe Nhạc Trực Tuyến*
 
+🌐 **Production Live URL:** [https://musiccollector.kandes.io.vn](https://musiccollector.kandes.io.vn)  
+🚀 **CI/CD Pipeline:** GitHub Actions + Oracle Cloud Infrastructure (OCI) Always Free Auto-Deploy
+
 ---
 
 ## 🌟 Tính Năng Nổi Bật v3
