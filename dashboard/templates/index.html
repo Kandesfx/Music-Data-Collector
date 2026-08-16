@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/style.css?v={{ asset_version }}">
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 <body>
@@ -44,7 +44,7 @@
       <a id="btn-open-audit-modal" class="nav-item" onclick="openAuditLogModal()">
         <span class="nav-icon text-green">⚡</span> Popup Xem Nhanh Logs
       </a>
-      <a id="btn-open-cookie-modal" class="nav-item">
+      <a id="btn-open-cookie-modal" class="nav-item" onclick="window.openCookieModal()">
         <span class="nav-icon text-yellow">🍪</span> Headless Cookies
       </a>
       <a id="btn-toggle-guide" class="nav-item">
@@ -1431,7 +1431,7 @@
         <div class="modal-title text-yellow">
           🍪 Quản Trị Headless Cookie Pool (YouTube / Spotify)
         </div>
-        <button id="btn-close-cookie-modal" class="modal-close">✕</button>
+        <button id="btn-close-cookie-modal" class="modal-close" onclick="window.closeCookieModal()">✕</button>
       </div>
       <div class="modal-body flex-col" style="gap: 12px;">
         <div class="flex-between">
@@ -1444,7 +1444,7 @@
             </div>
           </div>
           <div class="flex-row" style="gap: 6px; width: auto;">
-            <button id="btn-open-add-cookie" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">
+            <button id="btn-open-add-cookie" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;" onclick="window.openAddCookieForm()">
               ➕ Thêm Cookie Mới
             </button>
           </div>
@@ -1455,7 +1455,7 @@
           <input type="hidden" id="cookie-edit-id" value="">
           <div class="flex-between">
             <span id="cookie-form-title" style="font-weight: 700; color: var(--accent-yellow); font-size: 12px;">➕ Thêm Cookie Mới Vào Pool</span>
-            <button type="button" id="btn-close-cookie-form" class="btn btn-secondary" style="padding: 2px 6px; font-size: 10px;">✕ Đóng</button>
+            <button type="button" id="btn-close-cookie-form" class="btn btn-secondary" style="padding: 2px 6px; font-size: 10px;" onclick="window.closeCookieForm()">✕ Đóng</button>
           </div>
 
           <div class="grid-2">
@@ -1727,6 +1727,6 @@
     </div>
   </div>
 
-  <script src="/static/js/main.js"></script>
+  <script src="/static/js/main.js?v={{ asset_version }}"></script>
 </body>
 </html>

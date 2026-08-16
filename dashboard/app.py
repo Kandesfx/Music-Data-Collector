@@ -41,6 +41,19 @@ app.config["SECRET_KEY"] = settings.DASHBOARD_SECRET_KEY if hasattr(settings, "D
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 
+@app.context_processor
+def inject_asset_version():
+    return {"asset_version": int(time.time())}
+
+
+@app.after_request
+def add_header(response):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 class PipelineController:
     """Controls the background pipeline and broadcasts telemetry via WebSockets."""
 

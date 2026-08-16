@@ -998,19 +998,54 @@ const cookieIsActive = document.getElementById("cookie-is-active");
 const btnTestCookieForm = document.getElementById("btn-test-cookie-form");
 const cookieFormTestResult = document.getElementById("cookie-form-test-result");
 
+window.openCookieModal = function() {
+  const modal = document.getElementById("cookie-modal");
+  if (modal) {
+    modal.style.display = "flex";
+    loadCookiePool();
+  }
+};
+
+window.closeCookieModal = function() {
+  const modal = document.getElementById("cookie-modal");
+  if (modal) modal.style.display = "none";
+};
+
+window.openAddCookieForm = function() {
+  const form = document.getElementById("form-cookie-pool");
+  const editId = document.getElementById("cookie-edit-id");
+  const isActive = document.getElementById("cookie-is-active");
+  const testRes = document.getElementById("cookie-form-test-result");
+  const title = document.getElementById("cookie-form-title");
+  if (form) {
+    form.reset();
+    if (editId) editId.value = "";
+    if (isActive) isActive.checked = true;
+    if (title) title.textContent = "➕ Thêm Cookie Mới Vào Pool";
+    form.style.display = "flex";
+    if (testRes) testRes.style.display = "none";
+  }
+};
+
+window.closeCookieForm = function() {
+  const form = document.getElementById("form-cookie-pool");
+  if (form) form.style.display = "none";
+};
+
 async function loadCookiePool() {
-  if (!cookiePoolTableBody) return;
+  const tableBody = document.getElementById("cookie-pool-table-body");
+  if (!tableBody) return;
   try {
-    cookiePoolTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-dim" style="padding: 20px;">⏳ Đang tải danh sách Cookies từ database...</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-dim" style="padding: 20px;">⏳ Đang tải danh sách Cookies từ database...</td></tr>`;
     const res = await fetch("/api/cookies");
     const data = await res.json();
 
     if (!data.success || !data.cookies || data.cookies.length === 0) {
-      cookiePoolTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-dim" style="padding: 20px;">Chưa có Cookie nào trong pool. Hãy bấm '➕ Thêm Cookie Mới' hoặc nạp file cookies.txt.</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-dim" style="padding: 20px;">Chưa có Cookie nào trong pool. Hãy bấm '➕ Thêm Cookie Mới' hoặc nạp file cookies.txt.</td></tr>`;
       return;
     }
 
-    cookiePoolTableBody.innerHTML = data.cookies.map((c) => {
+    tableBody.innerHTML = data.cookies.map((c) => {
       let svcBadge = `<span class="badge badge-danger" style="font-size: 10px; font-weight: 700;">📺 YouTube</span>`;
       if (c.service === "spotify") {
         svcBadge = `<span class="badge badge-success" style="font-size: 10px; font-weight: 700;">🎵 Spotify</span>`;
@@ -1062,42 +1097,24 @@ async function loadCookiePool() {
       `;
     }).join("");
   } catch (err) {
-    if (cookiePoolTableBody) {
-      cookiePoolTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-red" style="padding: 20px;">Lỗi tải Cookie Pool: ${err.message}</td></tr>`;
+    if (tableBody) {
+      tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-red" style="padding: 20px;">Lỗi tải Cookie Pool: ${err.message}</td></tr>`;
     }
   }
 }
+window.loadCookiePool = loadCookiePool;
 
-if (btnOpenCookieModal && cookieModal) {
-  btnOpenCookieModal.addEventListener("click", () => {
-    cookieModal.style.display = "flex";
-    loadCookiePool();
-  });
-
-  if (btnCloseCookieModal) {
-    btnCloseCookieModal.addEventListener("click", () => {
-      cookieModal.style.display = "none";
-    });
-  }
+if (btnOpenCookieModal) {
+  btnOpenCookieModal.addEventListener("click", window.openCookieModal);
 }
-
+if (btnCloseCookieModal) {
+  btnCloseCookieModal.addEventListener("click", window.closeCookieModal);
+}
 if (btnOpenAddCookie) {
-  btnOpenAddCookie.addEventListener("click", () => {
-    if (formCookiePool) {
-      formCookiePool.reset();
-      cookieEditId.value = "";
-      if (cookieIsActive) cookieIsActive.checked = true;
-      document.getElementById("cookie-form-title").textContent = "➕ Thêm Cookie Mới Vào Pool";
-      formCookiePool.style.display = "flex";
-      cookieFormTestResult.style.display = "none";
-    }
-  });
+  btnOpenAddCookie.addEventListener("click", window.openAddCookieForm);
 }
-
 if (btnCloseCookieForm) {
-  btnCloseCookieForm.addEventListener("click", () => {
-    if (formCookiePool) formCookiePool.style.display = "none";
-  });
+  btnCloseCookieForm.addEventListener("click", window.closeCookieForm);
 }
 
 // File Reader for txt cookies
