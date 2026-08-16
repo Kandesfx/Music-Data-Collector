@@ -60,7 +60,7 @@ echo "⚙️ [5/6] Cấu hình Systemd Service để chạy ngầm và tự kh�
 cat <<EOF | sudo tee /etc/systemd/system/music-collector.service
 [Unit]
 Description=Music Data Collector & Streaming Dashboard Service
-After=network.target
+After=network.target docker.service
 
 [Service]
 User=$USER
@@ -68,9 +68,10 @@ WorkingDirectory=$PROJECT_DIR
 Environment="PATH=$PROJECT_DIR/.venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PYTHONUTF8=1"
 Environment="PYTHONIOENCODING=utf-8"
-ExecStart=$PROJECT_DIR/.venv/bin/gunicorn --worker-class eventlet -w 1 --bind 127.0.0.1:5000 dashboard.app:app
+Environment="MONGO_URI=mongodb://127.0.0.1:27017/music_streaming"
+ExecStart=$PROJECT_DIR/.venv/bin/python dashboard/app.py
 Restart=always
-RestartSec=5
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
