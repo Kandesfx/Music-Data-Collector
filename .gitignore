@@ -64,3 +64,8 @@ logs/*.log
 *.swo
 .DS_Store
 Thumbs.db
+
+# Temporary Caches
+.cache
+*.spotdl
+.agents/
