@@ -1,0 +1,1654 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Music Data Collector Studio — Đồ Án Tốt Nghiệp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  
+  <!-- ─── Sidebar Navigation ─── -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-logo-icon">🎵</span>
+      <div class="sidebar-logo-text">
+        <span class="sidebar-title">Music Collector</span>
+        <span class="sidebar-subtitle">Studio Cockpit v2.5</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav" role="tablist">
+      <div class="nav-section-title">Workspace Views</div>
+      <a id="nav-btn-sourcing" class="nav-item main-tab-btn active" role="tab" aria-selected="true" aria-controls="view-sourcing-studio">
+        <span class="nav-icon">⚡</span> Thu Thập &amp; Pipeline
+      </a>
+      <a id="nav-btn-catalog" class="nav-item main-tab-btn" role="tab" aria-selected="false" aria-controls="view-catalog-studio">
+        <span class="nav-icon">📚</span> Kho Dữ Liệu &amp; Duyệt
+      </a>
+      <a id="nav-btn-logs" class="nav-item main-tab-btn" role="tab" aria-selected="false" aria-controls="view-logs-studio">
+        <span class="nav-icon text-green">📜</span> Nhật Ký &amp; Log Chi Tiết
+      </a>
+      
+      <div class="nav-section-title">System &amp; Diagnostics</div>
+      <a id="btn-open-settings-modal" class="nav-item">
+        <span class="nav-icon text-cyan">⚙️</span> Settings &amp; Test Live
+      </a>
+      <a id="btn-open-team-modal" class="nav-item">
+        <span class="nav-icon text-purple">👥</span> Team &amp; Leaderboard
+      </a>
+      <a id="btn-open-audit-modal" class="nav-item" onclick="openAuditLogModal()">
+        <span class="nav-icon text-green">⚡</span> Popup Xem Nhanh Logs
+      </a>
+      <a id="btn-open-cookie-modal" class="nav-item">
+        <span class="nav-icon text-yellow">🍪</span> Headless Cookies
+      </a>
+      <a id="btn-toggle-guide" class="nav-item">
+        <span class="nav-icon text-green">❓</span> Hướng Dẫn Hệ Thống
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      {% if current_user %}
+      <div class="user-profile">
+        <div class="user-info">
+          <span class="user-name">👤 {{ current_user.display_name or current_user.username }}</span>
+          <span class="user-role">{{ current_user.role }}</span>
+        </div>
+        <a href="/logout" class="logout-btn" title="Đăng xuất khỏi hệ thống">🚪</a>
+      </div>
+      {% endif %}
+    </div>
+  </aside>
+
+  <!-- ─── Main Content Container ─── -->
+  <main class="main-content">
+    
+    <!-- Top Bar Navigation & Telemetry Header -->
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <div class="top-bar-title">Music Collector Studio</div>
+        <span class="top-bar-subtitle">| Spotify Metadata + YouTube 320k Audio &amp; Synced Karaoke .lrc</span>
+      </div>
+
+      <div class="top-bar-actions">
+        <button id="btn-header-audit-logs" class="header-btn" onclick="openAuditLogModal()">
+          <span class="text-green">📜 Audit Logs</span>
+        </button>
+        <button id="btn-header-guide" class="header-btn" onclick="document.getElementById('guide-modal').style.display='flex'">
+          <span>❓ Hướng Dẫn</span>
+        </button>
+        <button id="btn-header-settings" class="header-btn" onclick="document.getElementById('settings-modal').style.display='flex'; socket.emit('get_system_settings');">
+          <span class="text-cyan">⚙️ Settings</span>
+        </button>
+        <div class="status-indicator">
+          <span class="status-dot" id="task-status-dot"></span>
+          <span id="task-status">Idle</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Scrollable View Container -->
+    <div class="view-container">
+      
+      <!-- ─── KPI Metrics Strip (6 Dense Metric Cards) ─── -->
+      <div class="metrics-strip">
+        <div class="metric-pill">
+          <div class="metric-pill-left">
+            <span class="metric-pill-title">Tổng Bài Hát</span>
+            <span class="metric-pill-value text-cyan" id="val-total-tracks">0</span>
+          </div>
+          <div class="metric-pill-icon">🎶</div>
+        </div>
+
+        <div class="metric-pill">
+          <div class="metric-pill-left">
+            <span class="metric-pill-title">Đã Tải MP3</span>
+            <span class="metric-pill-value text-green" id="val-completed-tracks">0</span>
+          </div>
+          <div class="metric-pill-icon">🎵</div>
+        </div>
+
+        <div class="metric-pill">
+          <div class="metric-pill-left">
+            <span class="metric-pill-title">Chờ Tải Audio</span>
+            <span class="metric-pill-value text-yellow" id="val-pending-tracks">0</span>
+          </div>
+          <div class="metric-pill-icon">⏳</div>
+        </div>
+
+        <div class="metric-pill">
+          <div class="metric-pill-left">
+            <span class="metric-pill-title">Tải Thất Bại</span>
+            <span class="metric-pill-value text-red" id="val-failed-tracks">0</span>
+          </div>
+          <div class="metric-pill-icon">⚠️</div>
+        </div>
+
+        <div class="metric-pill">
+          <div class="metric-pill-left">
+            <span class="metric-pill-title">Nghệ Sĩ / Ca Sĩ</span>
+            <span class="metric-pill-value text-purple" id="val-artists">0</span>
+          </div>
+          <div class="metric-pill-icon">🎤</div>
+        </div>
+
+        <div class="metric-pill">
+          <div class="metric-pill-left">
+            <span class="metric-pill-title">Dung Lượng Audio</span>
+            <span class="metric-pill-value text-green" id="val-audio-size">0 MB</span>
+          </div>
+          <div class="metric-pill-icon">💾</div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!-- VIEW 1: SOURCING PIPELINE & DOWNLOAD STUDIO                -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <div id="view-sourcing-studio" class="view-panel active">
+        <div class="grid-2">
+          
+          <!-- LEFT COLUMN: Sourcing & Pipeline Controls -->
+          <div class="flex-col">
+            
+            <!-- Card 1: Sourcing Studio & Bộ Lọc Nhạc -->
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">🎯 Sourcing Studio &amp; Bộ Lọc Nhạc</div>
+                  <div class="card-subtitle">Cào theo Nghệ sĩ, Album, Từ khóa, Spotify &amp; Direct Link</div>
+                </div>
+              </div>
+
+              <div class="card-body">
+                <div class="flex-row" style="flex-wrap: wrap;">
+                  <select id="crawl-mode" class="input-field" style="width: 170px;">
+                    <option value="search" selected>🔍 Tìm Kiếm Từ Khóa</option>
+                    <option value="artist">🎤 Nghệ Sĩ / Nhạc Sĩ</option>
+                    <option value="album">💿 Album</option>
+                    <option value="playlist">🔗 Custom Spotify URL</option>
+                    <option value="direct">🌐 Direct URL (YouTube, SoundCloud...)</option>
+                  </select>
+
+                  <input type="text" id="crawl-query" class="input-field" placeholder="Nhập từ khóa tìm kiếm (ví dụ: Nhạc Trẻ 2026, V-Pop Hits, Acoustic Chill...)..." style="flex: 1; min-width: 180px;">
+
+                  <select id="crawl-genre" class="input-field" style="width: 120px;">
+                    <option value="">Thể loại: Auto</option>
+                    <option value="vpop">V-Pop</option>
+                    <option value="pop">Pop</option>
+                    <option value="indie">Indie</option>
+                    <option value="ballad">Ballad</option>
+                    <option value="rock">Rock</option>
+                    <option value="hiphop">Hip-Hop</option>
+                    <option value="rnb">R&amp;B</option>
+                    <option value="jazz">Jazz</option>
+                    <option value="acoustic">Acoustic</option>
+                  </select>
+                </div>
+
+                <div class="flex-row">
+                  <button id="btn-preview-search" class="btn btn-secondary flex-1" style="border-color: var(--accent-cyan); color: var(--accent-cyan);">
+                    🔍 Xem Trước &amp; Chọn Lọc (Preview Table)
+                  </button>
+                  <button id="btn-start-crawl" class="btn btn-primary flex-1">
+                    ⚡ Cào &amp; Lưu Nhanh Toàn Bộ
+                  </button>
+                </div>
+
+                <!-- Smart Trending & Live Discovery Feed -->
+                <div class="smart-trends-card" style="margin-top: 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px;">
+                  <div class="flex-between" style="margin-bottom: 8px;">
+                    <div class="flex-row" style="gap: 6px; align-items: center;">
+                      <span style="font-size: 12.5px; font-weight: 700; color: var(--accent-cyan);">🔥 Xu Hướng &amp; Khám Phá Thông Minh (Live Discovery)</span>
+                      <span class="badge badge-purple" style="font-size: 9px; padding: 1px 5px;">SPOTIFY &amp; VIRAL</span>
+                    </div>
+                    <button id="btn-sync-trends" class="btn btn-secondary" style="padding: 2px 8px; font-size: 10.5px; border-color: var(--border-color);" title="Cập nhật xu hướng thời gian thực">
+                      🔄 Làm Mới Xu Hướng
+                    </button>
+                  </div>
+
+                  <!-- Trends Category Tabs -->
+                  <div class="flex-row" style="gap: 4px; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; overflow-x: auto;">
+                    <button class="trend-tab-btn active" data-tab="keywords" style="background: rgba(6,182,212,0.15); color: var(--accent-cyan); border: 1px solid var(--accent-cyan); border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; white-space: nowrap;">🔍 Top Tìm Kiếm Hot</button>
+                    <button class="trend-tab-btn" data-tab="artists" style="background: transparent; color: var(--text-muted); border: 1px solid var(--border-color); border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; white-space: nowrap;">🎤 Top Nghệ Sĩ</button>
+                    <button class="trend-tab-btn" data-tab="albums" style="background: transparent; color: var(--text-muted); border: 1px solid var(--border-color); border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; white-space: nowrap;">💿 Album Mới Phát Hành</button>
+                    <button class="trend-tab-btn" data-tab="playlists" style="background: transparent; color: var(--text-muted); border: 1px solid var(--border-color); border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; white-space: nowrap;">🎧 Top Bảng Xếp Hạng</button>
+                  </div>
+
+                  <!-- Trends Dynamic Content -->
+                  <div id="trends-dynamic-chips" class="quick-preset-chips" style="min-height: 48px; display: flex; flex-wrap: wrap; gap: 6px;">
+                    <span class="text-dim" style="font-size: 11.5px; padding: 8px 0;">⏳ Đang tải danh sách xu hướng thông minh...</span>
+                  </div>
+                </div>
+
+                <!-- Interactive Search & Preview Drawer -->
+                <div id="preview-section" style="display: none; background: var(--bg-input); border: 1px solid var(--accent-cyan); border-radius: var(--radius-md); padding: 12px; margin-top: 4px;">
+                  <div class="flex-between mb-4" style="border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                    <div class="flex-row">
+                      <span style="font-weight: 700; color: var(--accent-cyan); font-size: 12.5px;">📋 Kết Quả Tìm Kiếm</span>
+                      <span id="preview-stats" class="text-dim" style="font-size: 11px;">(0 bài)</span>
+                    </div>
+                    <div class="flex-row">
+                      <button id="btn-import-selected" class="btn btn-primary" style="padding: 4px 10px; font-size: 11.5px;">📥 Import Selected (0 bài)</button>
+                      <button id="btn-close-preview" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">✕ Đóng</button>
+                    </div>
+                  </div>
+
+                  <div class="flex-between mb-4" style="font-size: 11.5px;">
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text-muted);">
+                      <input type="checkbox" id="select-all-preview" checked style="cursor: pointer;">
+                      <span>Chọn tất cả</span>
+                    </label>
+                    <span id="selected-count-label" class="text-green" style="font-weight: 600;">Đã chọn: 0 / 0 bài</span>
+                  </div>
+
+                  <div class="table-responsive" style="max-height: 260px;">
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th style="width: 28px;">#</th>
+                          <th style="width: 40px;">Bìa</th>
+                          <th>Tên Bài Hát &amp; Nghệ Sĩ</th>
+                          <th>Album</th>
+                          <th style="width: 65px;">Thời Lượng</th>
+                          <th style="width: 60px;">Độ Hot</th>
+                          <th style="width: 140px;">Trạng Thái DB</th>
+                        </tr>
+                      </thead>
+                      <tbody id="preview-table-body">
+                        <!-- Dynamic track rows -->
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2: Batch Audio Download & Pipeline Controls -->
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">⚡ Tiến Trình Tải MP3 320k &amp; Điều Khiển Pipeline</div>
+                  <div class="card-subtitle">Quản trị luồng yt-dlp &amp; spotDL tự động</div>
+                </div>
+                <div class="flex-row">
+                  <span style="font-size: 11.5px; color: var(--text-muted);">Proxy:</span>
+                  <label class="switch">
+                    <input type="checkbox" id="toggle-proxy">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="card-body">
+                <div class="grid-2">
+                  <div class="form-group">
+                    <label class="form-label">Số lượng bài cần tải (Limit):</label>
+                    <input type="number" id="download-limit" class="input-field" value="20" min="1" max="1000">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Độ trễ giữa các bài (Delay giây):</label>
+                    <input type="number" id="download-delay" class="input-field" value="3.0" step="0.5" min="0.5" max="30">
+                  </div>
+                </div>
+
+                <div class="flex-row">
+                  <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11.5px; color: var(--text-muted);">
+                    <input type="checkbox" id="download-retry-failed">
+                    <span>Thử tải lại các bài thất bại (Retry Failed)</span>
+                  </label>
+                </div>
+
+                <!-- Primary Audio Download Actions -->
+                <div class="flex-row" style="gap: 8px;">
+                  <button id="btn-preview-download-queue" class="btn btn-secondary flex-1" style="border-color: var(--accent-green); color: var(--accent-green); justify-content: center; padding: 7px 10px;">
+                    🔍 Xem Danh Sách Chờ Tải (Preview)
+                  </button>
+                  <button id="btn-start-download" class="btn btn-success flex-1" style="justify-content: center; padding: 7px 10px;">
+                    ▶ Bắt Đầu Tải Audio
+                  </button>
+                </div>
+
+                <!-- Pipeline & Utility Controls -->
+                <div class="flex-row" style="gap: 8px;">
+                  <button id="btn-pause-pipeline" class="btn btn-warning flex-1" style="justify-content: center; padding: 6px 10px;" title="Tạm dừng tải">
+                    ⏸ Tạm Dừng
+                  </button>
+                  <button id="btn-stop-pipeline" class="btn btn-danger flex-1" style="justify-content: center; padding: 6px 10px;" title="Dừng hẳn tải">
+                    ⏹ Dừng Hẳn
+                  </button>
+                  <button id="btn-export-data" class="btn btn-secondary flex-1" style="justify-content: center; padding: 6px 10px;" title="Xuất dữ liệu JSON, SQL &amp; Markdown">
+                    📦 Xuất Dữ Liệu
+                  </button>
+                </div>
+
+                <!-- Interactive Audio Download Preview Queue Drawer -->
+                <div id="download-preview-section" style="display: none; background: var(--bg-input); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 14px; margin-top: 10px;">
+                  <div class="flex-between" style="margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                    <div>
+                      <div style="font-weight: 700; color: var(--accent-green); font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                        <span>📋 Quản Trị Hàng Đợi Tải Audio (Download Queue Manager)</span>
+                        <span class="badge badge-success" id="queue-total-badge" style="font-size: 9.5px;">0 BÀI</span>
+                      </div>
+                      <div id="download-queue-stats" style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">
+                        Lọc, tìm kiếm, phân trang và chọn lọc chính xác các bài hát trước khi tải MP3 320k
+                      </div>
+                    </div>
+                    <div class="flex-row" style="gap: 6px; width: auto;">
+                      <button id="btn-confirm-start-download" class="btn btn-success" style="padding: 5px 12px; font-size: 11.5px; font-weight: 700;">
+                        ▶ Tải Các Bài Đã Chọn
+                      </button>
+                      <button id="btn-close-download-preview" class="btn btn-secondary" style="padding: 5px 8px; font-size: 11px;">✕ Đóng</button>
+                    </div>
+                  </div>
+
+                  <!-- Queue Search & Filter Controls -->
+                  <div class="flex-row" style="gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
+                    <input type="text" id="queue-search" class="input-field" placeholder="🔍 Tìm kiếm bài hát, ca sĩ, album trong hàng đợi..." style="flex: 2; min-width: 180px; font-size: 11.5px; padding: 5px 10px;">
+                    
+                    <select id="queue-filter-status" class="input-field" style="flex: 1; min-width: 130px; font-size: 11.5px; padding: 5px 8px;">
+                      <option value="pending" selected>⏳ Chờ Tải (Pending)</option>
+                      <option value="failed">⚠️ Tải Lỗi (Failed)</option>
+                      <option value="all">Tất cả (Pending + Failed)</option>
+                    </select>
+
+                    <select id="queue-filter-genre" class="input-field" style="flex: 1; min-width: 110px; font-size: 11.5px; padding: 5px 8px;">
+                      <option value="all">Thể loại: Tất cả</option>
+                      <option value="vpop">V-Pop</option>
+                      <option value="pop">Pop</option>
+                      <option value="indie">Indie</option>
+                      <option value="ballad">Ballad</option>
+                      <option value="rock">Rock</option>
+                      <option value="hiphop">Hip-Hop</option>
+                      <option value="rnb">R&amp;B</option>
+                      <option value="jazz">Jazz</option>
+                      <option value="acoustic">Acoustic</option>
+                    </select>
+
+                    <select id="queue-filter-user" class="input-field" style="flex: 1; min-width: 110px; font-size: 11.5px; padding: 5px 8px;">
+                      <option value="all">Người nạp: Tất cả</option>
+                      <option value="admin">👤 admin</option>
+                    </select>
+
+                    <select id="queue-limit" class="input-field" style="width: 95px; font-size: 11.5px; padding: 5px 6px;">
+                      <option value="10">10 / trang</option>
+                      <option value="20" selected>20 / trang</option>
+                      <option value="50">50 / trang</option>
+                      <option value="100">100 / trang</option>
+                    </select>
+                  </div>
+
+                  <!-- Queue Selection Utilities Bar -->
+                  <div class="flex-between" style="font-size: 11.5px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.05); padding: 6px 10px; border-radius: var(--radius-sm); margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                    <div class="flex-row" style="gap: 8px; width: auto;">
+                      <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text-main); font-weight: 600;">
+                        <input type="checkbox" id="select-all-download-queue" checked style="cursor: pointer; transform: scale(1.15);">
+                        <span>Chọn trang này</span>
+                      </label>
+                      <button id="btn-queue-select-all-pages" class="btn btn-secondary" style="padding: 2px 8px; font-size: 10.5px; border-color: rgba(255,255,255,0.15);">
+                        ⭐ Chọn toàn bộ hàng đợi
+                      </button>
+                      <button id="btn-queue-clear-selection" class="btn btn-secondary" style="padding: 2px 8px; font-size: 10.5px; border-color: rgba(255,255,255,0.15);">
+                        ✕ Bỏ chọn
+                      </button>
+                    </div>
+                    <span id="download-selected-count-label" class="text-green" style="font-weight: 700; font-size: 12px;">Đã chọn: 0 / 0 bài (~0.0 MB)</span>
+                  </div>
+
+                  <!-- Data Table -->
+                  <div class="table-responsive" style="max-height: 280px;">
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th style="width: 28px;">#</th>
+                          <th style="width: 38px;">Bìa</th>
+                          <th>Tên Bài Hát &amp; Nghệ Sĩ</th>
+                          <th>Album &amp; Thời Lượng</th>
+                          <th style="width: 65px;">Thể Loại</th>
+                          <th style="width: 80px;">Người Nạp</th>
+                          <th style="width: 85px;">Trạng Thái</th>
+                        </tr>
+                      </thead>
+                      <tbody id="download-queue-table-body">
+                        <!-- Dynamic items -->
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <!-- Pagination Bar -->
+                  <div class="flex-between" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); font-size: 11px; color: var(--text-dim);">
+                    <div id="queue-pagination-info">Hiển thị 0 - 0 trên tổng số 0 bài</div>
+                    <div class="flex-row" style="gap: 4px; width: auto;">
+                      <button id="btn-queue-prev-page" class="btn btn-secondary" style="padding: 2px 8px; font-size: 10.5px;" disabled>◀ Trước</button>
+                      <span id="queue-page-number" style="padding: 2px 8px; font-weight: 700; color: var(--text-main);">Trang 1 / 1</span>
+                      <button id="btn-queue-next-page" class="btn btn-secondary" style="padding: 2px 8px; font-size: 10.5px;" disabled>Sau ▶</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- RIGHT COLUMN: Real-Time Execution Log & Progress -->
+          <div class="flex-col">
+            
+            <!-- Live Progress Bar Card -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">📡 Tiến Độ Xử Lý Thời Gian Thực</div>
+                <span class="badge badge-success font-mono" id="engine-badge">320 kbps MP3</span>
+              </div>
+              <div class="card-body">
+                <div class="progress-box">
+                  <div class="flex-between" style="font-size: 12px;">
+                    <span id="progress-track-name" class="text-cyan" style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px;">Chờ lệnh tải bài hát...</span>
+                    <span id="progress-text" class="text-green font-mono" style="font-weight: 700;">0%</span>
+                  </div>
+                  <div class="progress-track">
+                    <div class="progress-fill" id="progress-fill"></div>
+                  </div>
+                  <div class="flex-between" style="font-size: 11px; color: var(--text-muted);">
+                    <span id="progress-count">Tiến độ: 0 / 0</span>
+                    <span id="progress-stage-info" class="text-dim">Engine: yt-dlp &amp; spotDL</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Execution Log Terminal & Top Genres -->
+            <div class="card flex-1">
+              <div class="card-header">
+                <div class="card-title">📜 Live Execution Log &amp; Phân Bổ Thể Loại</div>
+                <span class="text-dim" style="font-size: 10.5px;">WebSocket Telemetry</span>
+              </div>
+
+              <div class="card-body flex-1">
+                <!-- Genre distribution mini-bars -->
+                <div id="genre-list" class="genre-list-box mb-4"></div>
+
+                <!-- Console terminal -->
+                <div class="console-box flex-1" id="console-log">
+                  <div class="log-line"><span class="log-time">[System]</span><span class="log-info">Studio Dashboard initialized. Ready for operations.</span></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!-- VIEW 2: DATABASE CATALOG & CONTENT MODERATION STUDIO       -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <div id="view-catalog-studio" class="view-panel">
+        <div class="card">
+          
+          <!-- Catalog Header & Control Bar -->
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <span>📚 Tổng Quan Kho Dữ Liệu Âm Nhạc Trong Database</span>
+                <span id="catalog-total-counter" class="badge badge-info">0 bài</span>
+              </div>
+              <div class="card-subtitle">Quản trị CRUD đầy đủ, xem chi tiết metadata toàn diện, nghe nhạc trực tiếp (In-App Player), audit người nạp &amp; kiểm duyệt</div>
+            </div>
+
+            <div class="flex-row" style="flex-wrap: wrap;">
+              <button id="btn-open-add-track" class="btn btn-primary">
+                ➕ Thêm Bài Hát
+              </button>
+              <button id="btn-bulk-approve" class="btn btn-success">
+                ✅ Duyệt Đã Chọn
+              </button>
+              <button id="btn-bulk-flag" class="btn btn-warning">
+                🚩 Gắn Cờ
+              </button>
+              <button id="btn-bulk-delete" class="btn btn-danger">
+                🗑️ Xóa Đã Chọn
+              </button>
+              <button id="btn-refresh-catalog" class="btn btn-secondary">
+                🔄 Làm Mới
+              </button>
+            </div>
+          </div>
+
+          <div class="card-body">
+            
+            <!-- Multi-criteria Filter & Search Toolbar -->
+            <div class="flex-row" style="flex-wrap: wrap; background: var(--bg-input); padding: 8px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+              <div style="flex: 2; min-width: 220px; position: relative;">
+                <input type="text" id="catalog-search" class="input-field" placeholder="🔍 Tìm theo Tên bài, Ca sĩ, Album hoặc Spotify ID...">
+              </div>
+
+              <select id="catalog-filter-genre" class="input-field" style="flex: 1; min-width: 120px;">
+                <option value="all">Tất cả Thể Loại</option>
+                <option value="vpop">V-Pop</option>
+                <option value="pop">Pop</option>
+                <option value="indie">Indie</option>
+                <option value="ballad">Ballad</option>
+                <option value="rock">Rock</option>
+                <option value="hiphop">Hip-Hop / Rap</option>
+                <option value="rnb">R&amp;B</option>
+                <option value="jazz">Jazz</option>
+                <option value="acoustic">Acoustic</option>
+              </select>
+
+              <select id="catalog-filter-download" class="input-field" style="flex: 1; min-width: 130px;">
+                <option value="all">Tất cả Trạng Thái Audio</option>
+                <option value="completed">🎵 Đã Tải Audio (320k)</option>
+                <option value="pending">📋 Chờ Tải Audio</option>
+                <option value="failed">⚠️ Tải Thất Bại</option>
+              </select>
+
+              <select id="catalog-filter-collector" class="input-field" style="flex: 1; min-width: 130px;">
+                <option value="all">Tất cả Người Thêm</option>
+                <option value="admin">👤 admin</option>
+              </select>
+
+              <select id="catalog-filter-ingest" class="input-field" style="flex: 1; min-width: 120px;">
+                <option value="all">Tất cả Loại Nạp</option>
+                <option value="full_audio">🎵 Audio 320k</option>
+                <option value="metadata_only">📋 Metadata Only</option>
+              </select>
+
+              <select id="catalog-filter-moderation" class="input-field" style="flex: 1; min-width: 120px;">
+                <option value="all">Tất cả Kiểm Duyệt</option>
+                <option value="approved">✅ Đã Duyệt (Approved)</option>
+                <option value="pending">⏳ Chờ Duyệt (Pending)</option>
+                <option value="flagged">🚩 Cảnh Báo (Flagged)</option>
+              </select>
+
+              <select id="catalog-page-size" class="input-field" style="width: 100px;">
+                <option value="10">10 / trang</option>
+                <option value="20" selected>20 / trang</option>
+                <option value="50">50 / trang</option>
+                <option value="100">100 / trang</option>
+              </select>
+            </div>
+
+            <!-- Server-Side Paginated Data Table -->
+            <div class="table-responsive" style="max-height: 56vh;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 32px;"><input type="checkbox" id="catalog-select-all" style="cursor: pointer;"></th>
+                    <th style="width: 44px; text-align: center;">Bìa</th>
+                    <th style="width: 44px; text-align: center;">Nghe</th>
+                    <th>Tên Bài Hát &amp; Nghệ Sĩ / Collab</th>
+                    <th>Album &amp; Thời Lượng</th>
+                    <th style="width: 85px;">Thể Loại</th>
+                    <th style="width: 130px;">Người Nạp &amp; Loại</th>
+                    <th style="width: 120px;">Trạng Thái Audio</th>
+                    <th style="width: 95px;">Kiểm Duyệt</th>
+                    <th style="width: 160px; text-align: center;">Hành Động</th>
+                  </tr>
+                </thead>
+                <tbody id="catalog-table-body">
+                  <tr>
+                    <td colspan="10" style="text-align: center; padding: 28px; color: var(--text-muted);">
+                      ⏳ Đang tải dữ liệu từ database...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Server-Side Pagination Controls -->
+            <div class="flex-between mt-4">
+              <span id="catalog-pagination-info" style="font-size: 11.5px; color: var(--text-muted);">
+                Hiển thị 0 - 0 trong tổng số 0 bài hát
+              </span>
+
+              <div class="flex-row">
+                <button id="catalog-btn-first" class="btn btn-secondary">« Đầu</button>
+                <button id="catalog-btn-prev" class="btn btn-secondary">‹ Trước</button>
+                <span id="catalog-page-label" class="text-cyan font-mono" style="font-size: 12px; font-weight: 700; padding: 0 8px;">Trang 1 / 1</span>
+                <button id="catalog-btn-next" class="btn btn-secondary">Tiếp ›</button>
+                <button id="catalog-btn-last" class="btn btn-secondary">Cuối »</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!-- VIEW 3: FULL SYSTEM LOGS & DAILY ARCHIVE STUDIO            -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <div id="view-logs-studio" class="view-panel" style="display: none;">
+        <div class="card">
+          <div class="card-header" style="flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div class="card-title text-green">📜 Trung Tâm Nhật Ký Toàn Bộ &amp; Lưu Trữ Hoạt Động Hệ Thống</div>
+              <div class="card-subtitle">Truy xuất dữ liệu chi tiết theo từng ngày, xem dạng Terminal Live Console hoặc File Log Raw</div>
+            </div>
+
+            <!-- View Modes Switcher & Action Tools -->
+            <div class="flex-row" style="gap: 6px; width: auto; flex-wrap: wrap;">
+              <div class="btn-group" style="display: flex; gap: 2px; background: var(--bg-input); padding: 2px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                <button id="btn-mode-terminal" class="btn btn-primary" style="padding: 5px 10px; font-size: 11px;">🖥️ Terminal Live</button>
+                <button id="btn-mode-file" class="btn btn-secondary" style="padding: 5px 10px; font-size: 11px;">📄 File Log (.log)</button>
+                <button id="btn-mode-table" class="btn btn-secondary" style="padding: 5px 10px; font-size: 11px;">📊 Bảng Audit Mở Rộng</button>
+              </div>
+              <button id="btn-refresh-full-logs" class="btn btn-secondary" style="padding: 5px 10px; font-size: 11px;">🔄 Làm Mới</button>
+              <button id="btn-export-full-logs-json" class="btn btn-primary" style="padding: 5px 10px; font-size: 11px;">📥 Xuất JSON</button>
+              <button id="btn-download-full-log-file" class="btn btn-secondary" style="padding: 5px 10px; font-size: 11px; border-color: var(--accent-green); color: var(--accent-green);">📥 Tải File .log</button>
+            </div>
+          </div>
+
+          <div class="card-body flex-col" style="gap: 12px;">
+            
+            <!-- Daily Date Selector & Archive Carousel -->
+            <div class="flex-col" style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 14px; gap: 8px;">
+              <div class="flex-between" style="flex-wrap: wrap; gap: 8px;">
+                <div class="flex-row" style="gap: 8px; width: auto; align-items: center; flex-wrap: wrap;">
+                  <span style="font-size: 12px; font-weight: 700; color: var(--accent-green);">📅 Chọn Ngày Xem:</span>
+                  <input type="date" id="full-log-date-picker" class="input-field" style="width: 140px; padding: 4px 8px; font-size: 11.5px;">
+                  <button id="btn-date-today" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">Hôm Nay</button>
+                  <button id="btn-date-yesterday" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">Hôm Qua</button>
+                  <button id="btn-date-all" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">Toàn Bộ Lịch Sử</button>
+                </div>
+
+                <!-- Daily KPI metrics summary -->
+                <div id="full-log-daily-kpis" class="flex-row" style="gap: 8px; width: auto; font-size: 11px; flex-wrap: wrap;">
+                  <span class="badge badge-purple" id="daily-kpi-total">📊 0 sự kiện</span>
+                  <span class="badge badge-success" id="daily-kpi-success">✅ 0 thành công</span>
+                  <span class="badge badge-danger" id="daily-kpi-failed">❌ 0 thất bại</span>
+                  <span class="badge badge-cyan" id="daily-kpi-size">💾 0 KB</span>
+                </div>
+              </div>
+
+              <!-- Available Daily Log Days Badges -->
+              <div class="flex-row" id="daily-log-days-container" style="flex-wrap: wrap; gap: 6px; margin-top: 4px;">
+                <span style="font-size: 11px; color: var(--text-dim);">⏳ Đang tải lịch sử các ngày...</span>
+              </div>
+            </div>
+
+            <!-- Multi-Filter Toolbar -->
+            <div class="flex-row" style="flex-wrap: wrap; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 12px; gap: 8px;">
+              <input type="text" id="full-log-search" class="input-field" placeholder="🔍 Tìm kiếm log (nội dung, ID bài hát, URL, lỗi, người dùng)..." style="flex: 2; min-width: 200px;">
+
+              <select id="full-log-filter-user" class="input-field" style="width: 130px;">
+                <option value="all">👤 Tất cả User</option>
+              </select>
+
+              <select id="full-log-filter-action" class="input-field" style="width: 160px;">
+                <option value="all">⚡ Tất cả Hành Động</option>
+                <option value="ADD_TRACK">➕ ADD_TRACK</option>
+                <option value="UPDATE_TRACK">✏️ UPDATE_TRACK</option>
+                <option value="DELETE_TRACK">🗑️ DELETE_TRACK</option>
+                <option value="BULK_DELETE">🗑️ BULK_DELETE</option>
+                <option value="CRAWL_METADATA">🕷️ CRAWL_METADATA</option>
+                <option value="IMPORT_TRACKS">📥 IMPORT_TRACKS</option>
+                <option value="DOWNLOAD_AUDIO">⚡ DOWNLOAD_AUDIO</option>
+                <option value="REDOWNLOAD_TRACK">🔄 REDOWNLOAD</option>
+                <option value="DIRECT_URL_INGEST">🌐 DIRECT_URL</option>
+                <option value="UPDATE_PROXY">🛡️ UPDATE_PROXY</option>
+                <option value="UPDATE_SPOTIFY_APP">🔑 UPDATE_SPOTIFY_APP</option>
+                <option value="SET_ACTIVE_SPOTIFY_APP">★ SET_ACTIVE_APP</option>
+                <option value="MODERATE_TRACKS">🛡️ MODERATE</option>
+              </select>
+
+              <select id="full-log-filter-status" class="input-field" style="width: 130px;">
+                <option value="all">📊 Tất cả Trạng Thái</option>
+                <option value="SUCCESS">✅ SUCCESS</option>
+                <option value="FAILED">❌ FAILED</option>
+                <option value="WARNING">⚠️ WARNING</option>
+              </select>
+
+              <select id="full-log-page-size" class="input-field" style="width: 100px;">
+                <option value="20">20 / trang</option>
+                <option value="50" selected>50 / trang</option>
+                <option value="100">100 / trang</option>
+                <option value="200">200 / trang</option>
+              </select>
+            </div>
+
+            <!-- PANEL 1: Terminal Console Live Stream View -->
+            <div id="full-log-panel-terminal" class="flex-col" style="border: 1px solid #1e293b; border-radius: var(--radius-md); overflow: hidden; background: #0b0f19;">
+              <div class="flex-between" style="background: #111827; padding: 6px 12px; border-bottom: 1px solid #1f2937;">
+                <div class="flex-row" style="gap: 6px; width: auto; align-items: center;">
+                  <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ef4444;"></span>
+                  <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #f59e0b;"></span>
+                  <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #10b981;"></span>
+                  <span class="font-mono" style="font-size: 11px; color: #9ca3af; margin-left: 6px;" id="terminal-session-label">terminal@music-data-collector: ~/logs/$ (Live Stream)</span>
+                </div>
+                <div class="flex-row" style="gap: 8px; width: auto; align-items: center;">
+                  <label class="flex-row" style="gap: 4px; font-size: 11px; color: #9ca3af; cursor: pointer; width: auto; align-items: center;">
+                    <input type="checkbox" id="chk-terminal-autoscroll" checked> Tự cuộn
+                  </label>
+                  <label class="flex-row" style="gap: 4px; font-size: 11px; color: #9ca3af; cursor: pointer; width: auto; align-items: center;">
+                    <input type="checkbox" id="chk-terminal-wrap"> Wrap
+                  </label>
+                  <button id="btn-copy-terminal" class="btn btn-secondary" style="padding: 2px 6px; font-size: 10px;">📋 Copy</button>
+                  <button id="btn-clear-terminal" class="btn btn-secondary" style="padding: 2px 6px; font-size: 10px;">✕ Xóa Màn Hình</button>
+                </div>
+              </div>
+              <div id="full-log-terminal-output" class="font-mono" style="height: 520px; overflow-y: auto; padding: 12px; font-size: 11.5px; line-height: 1.6; color: #e2e8f0; white-space: pre-wrap; word-break: break-word;">
+                <!-- Streaming terminal lines rendered dynamically -->
+              </div>
+            </div>
+
+            <!-- PANEL 2: File Log Raw Inspector View -->
+            <div id="full-log-panel-file" class="flex-col" style="display: none; border: 1px solid #1e293b; border-radius: var(--radius-md); overflow: hidden; background: #0f172a;">
+              <div class="flex-between" style="background: #1e293b; padding: 8px 12px; border-bottom: 1px solid #334155;">
+                <div class="flex-row" style="gap: 8px; width: auto; align-items: center;">
+                  <span style="font-size: 12px; font-weight: 700; color: var(--accent-cyan);">📄 Chọn File Log:</span>
+                  <select id="select-log-file" class="input-field" style="width: 260px; padding: 4px 8px; font-size: 11.5px;"></select>
+                  <span id="file-log-stats-badge" class="badge badge-purple" style="font-size: 10.5px;">0 KB • 0 dòng</span>
+                </div>
+                <div class="flex-row" style="gap: 6px; width: auto;">
+                  <button id="btn-copy-file-content" class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px;">📋 Sao Chép Nội Dung</button>
+                  <button id="btn-download-selected-file" class="btn btn-primary" style="padding: 3px 8px; font-size: 11px;">📥 Tải File Log Này</button>
+                </div>
+              </div>
+              <pre id="file-log-content-box" class="font-mono" style="height: 520px; overflow-y: auto; margin: 0; padding: 12px; font-size: 11px; line-height: 1.5; color: #cbd5e1; background: #090d16;"></pre>
+            </div>
+
+            <!-- PANEL 3: Bảng Audit Mở Rộng (Tree & Detail Inspector) -->
+            <div id="full-log-panel-table" class="flex-col" style="display: none; gap: 8px;">
+              <div class="table-responsive" style="max-height: 480px; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 140px;">Thời Gian</th>
+                      <th style="width: 110px;">Người Thực Hiện</th>
+                      <th style="width: 150px;">Hành Động</th>
+                      <th style="width: 100px;">Trạng Thái</th>
+                      <th>Mô Tả Chi Tiết</th>
+                      <th style="width: 150px;">Đối Tượng (Target)</th>
+                      <th style="width: 70px; text-align: center;">Chi Tiết</th>
+                    </tr>
+                  </thead>
+                  <tbody id="full-log-table-body">
+                    <tr><td colspan="7" class="text-center text-dim" style="padding: 24px;">⏳ Đang nạp nhật ký hệ thống...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Pagination Controls -->
+              <div class="flex-between" style="font-size: 11.5px; color: var(--text-dim);">
+                <span id="full-log-pagination-info">Hiển thị 0 - 0 của 0 logs</span>
+                <div class="flex-row">
+                  <button id="full-log-btn-prev" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;">◀ Trước</button>
+                  <span id="full-log-page-label" style="font-weight: 700; color: var(--text-main); padding: 0 8px;">Trang 1 / 1</span>
+                  <button id="full-log-btn-next" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;">Sau ▶</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ─── Floating In-App Audio Player Dock ─── -->
+  <div id="in-app-player-bar" class="player-bar">
+    <div class="player-track-info">
+      <img id="player-track-cover" src="/static/img/default_cover.png" onerror="this.src='/static/img/default_cover.png'" class="player-cover" alt="Cover">
+      <div class="player-text">
+        <div id="player-track-name" class="player-title">Tên bài hát</div>
+        <div id="player-track-artist" class="player-artist">
+          <span id="player-track-artist-text">Ca sĩ</span>
+          <span id="player-track-attribution" class="badge badge-purple" style="font-size: 9.5px; padding: 1px 4px;">👤 admin</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="player-controls">
+      <div class="player-buttons">
+        <button id="player-btn-backward" class="player-ctrl-btn" title="Lùi 10 giây">⏮ -10s</button>
+        <button id="player-btn-play" class="btn-play" title="Phát / Dừng">▶</button>
+        <button id="player-btn-forward" class="player-ctrl-btn" title="Tua 10 giây">+10s ⏭</button>
+      </div>
+      <div class="player-scrubber">
+        <span id="player-current-time" class="player-time" style="text-align: right;">0:00</span>
+        <input type="range" id="player-seek-bar" class="range-slider" value="0" min="0" max="100" step="0.1">
+        <span id="player-total-time" class="player-time">0:00</span>
+      </div>
+    </div>
+
+    <div class="player-actions">
+      <button id="player-btn-inspect" class="btn btn-secondary text-cyan" style="border-color: rgba(6,182,212,0.3); font-size: 11px;" title="Kiểm tra toàn bộ metadata & ID3">
+        🔍 Metadata
+      </button>
+      <button id="player-btn-lyrics" class="btn btn-secondary text-purple" style="border-color: rgba(168,85,247,0.3); font-size: 11px;">
+        🎤 Lời .lrc
+      </button>
+      <div class="flex-row">
+        <span style="font-size: 12px; color: var(--text-dim);">🔊</span>
+        <input type="range" id="player-volume-slider" class="range-slider" min="0" max="1" step="0.05" value="0.9" style="width: 55px;">
+      </div>
+      <button id="player-btn-close" class="btn btn-secondary" style="width: 26px; height: 26px; padding: 0;" title="Đóng Player">✕</button>
+    </div>
+    <audio id="in-app-audio-element" style="display: none;"></audio>
+  </div>
+
+  <!-- ─── Modals (All Fully Integrated Modals) ─── -->
+
+  <!-- Modal 0: Comprehensive Full Metadata Inspector -->
+  <div id="track-inspector-modal" class="modal-overlay">
+    <div class="modal-container large" style="max-width: 900px;">
+      <div class="modal-header">
+        <div class="modal-title text-cyan">🔍 Chi Tiết Metadata Toàn Diện &amp; Phân Tích Kỹ Thuật</div>
+        <button id="btn-close-inspector" class="modal-close">✕</button>
+      </div>
+
+      <!-- Inspector Tabs -->
+      <div class="flex-row" style="background: var(--bg-card-header); padding: 8px 18px; border-bottom: 1px solid var(--border-color); gap: 6px;">
+        <button class="inspector-tab-btn btn btn-primary" data-tab="tab-inspect-visual" style="font-size: 11.5px;">📋 Tổng Quan Trực Quan</button>
+        <button class="inspector-tab-btn btn btn-secondary" data-tab="tab-inspect-json" style="font-size: 11.5px;">📦 MongoDB Raw JSON</button>
+        <button class="inspector-tab-btn btn btn-secondary" data-tab="tab-inspect-id3" style="font-size: 11.5px;">🏷️ Nhãn Nhúng ID3 MP3</button>
+        <button class="inspector-tab-btn btn btn-secondary" data-tab="tab-inspect-edit" style="font-size: 11.5px;">✏️ Sửa Nhanh</button>
+      </div>
+
+      <div class="modal-body">
+        
+        <!-- Tab 1: Rich Visual Cards Inspector -->
+        <div id="tab-inspect-visual" class="inspector-tab-content flex-col">
+          <div class="inspector-header-card">
+            <img id="inspect-cover-img" src="/static/img/default_cover.png" onerror="this.src='/static/img/default_cover.png'" class="inspector-cover" alt="Cover">
+            <div class="inspector-title-area">
+              <div id="inspect-track-name" class="inspector-title">Tên bài hát</div>
+              <div id="inspect-artist-name" class="inspector-artist">Nghệ sĩ</div>
+              <div class="flex-row" style="flex-wrap: wrap; margin-top: 4px; gap: 6px;">
+                <span id="inspect-badge-audio" class="badge badge-success">Audio 320k</span>
+                <span id="inspect-badge-moderation" class="badge badge-info">Approved</span>
+                <span id="inspect-badge-collector" class="badge badge-purple">👤 admin</span>
+                <span id="inspect-badge-ingest" class="badge badge-cyan">🏷️ full_audio</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="metadata-grid">
+            <div class="meta-cell">
+              <span class="meta-cell-label">Spotify ID</span>
+              <span id="inspect-spotify-id" class="meta-cell-value font-mono">-</span>
+            </div>
+            <div class="meta-cell">
+              <span class="meta-cell-label">Mã ISRC</span>
+              <span id="inspect-isrc" class="meta-cell-value font-mono">-</span>
+            </div>
+            <div class="meta-cell">
+              <span class="meta-cell-label">Thời Lượng</span>
+              <span id="inspect-duration" class="meta-cell-value font-mono">-</span>
+            </div>
+
+            <div class="meta-cell">
+              <span class="meta-cell-label">Album</span>
+              <span id="inspect-album" class="meta-cell-value">-</span>
+            </div>
+            <div class="meta-cell">
+              <span class="meta-cell-label">Ngày Phát Hành</span>
+              <span id="inspect-release-date" class="meta-cell-value font-mono">-</span>
+            </div>
+            <div class="meta-cell">
+              <span class="meta-cell-label">Track / Disc #</span>
+              <span id="inspect-track-number" class="meta-cell-value font-mono">-</span>
+            </div>
+
+            <div class="meta-cell">
+              <span class="meta-cell-label">Thể Loại (Genres)</span>
+              <span id="inspect-genres" class="meta-cell-value">-</span>
+            </div>
+            <div class="meta-cell">
+              <span class="meta-cell-label">Độ Phổ Biến (Popularity)</span>
+              <span id="inspect-popularity" class="meta-cell-value font-mono">-</span>
+            </div>
+            <div class="meta-cell">
+              <span class="meta-cell-label">Nội Dung 18+ (Explicit)</span>
+              <span id="inspect-explicit" class="meta-cell-value">-</span>
+            </div>
+
+            <div class="meta-cell">
+              <span class="meta-cell-label">Người Nạp Dữ Liệu</span>
+              <span id="inspect-added-by" class="meta-cell-value text-purple">-</span>
+            </div>
+            <div class="meta-cell">
+              <span class="meta-cell-label">Thời Gian Tạo (Created)</span>
+              <span id="inspect-created-at" class="meta-cell-value font-mono">-</span>
+            </div>
+            <div class="meta-cell">
+              <span class="meta-cell-label">Engine Tải Nhạc</span>
+              <span id="inspect-download-method" class="meta-cell-value font-mono">-</span>
+            </div>
+
+            <div class="meta-cell" style="grid-column: span 3;">
+              <span class="meta-cell-label">Đường Dẫn File Audio Cục Bộ (Local Path)</span>
+              <span id="inspect-local-path" class="meta-cell-value font-mono" style="font-size: 11px;">-</span>
+            </div>
+          </div>
+
+          <!-- Mini Lyrics Preview -->
+          <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; margin-top: 4px;">
+            <div class="flex-between mb-2">
+              <span style="font-size: 11.5px; font-weight: 700; color: var(--accent-purple);">🎤 Lời Karaoke .lrc Đồng Bộ</span>
+              <span id="inspect-has-lyrics" class="badge badge-purple">Có lời</span>
+            </div>
+            <div id="inspect-lyrics-preview" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); max-height: 90px; overflow-y: auto; line-height: 1.4; white-space: pre-wrap;">-</div>
+          </div>
+
+          <!-- Multi-Album Affiliations Strip -->
+          <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; margin-top: 4px;">
+            <div class="flex-between mb-2">
+              <span style="font-size: 11.5px; font-weight: 700; color: var(--accent-cyan);">🗂️ Các Album / Đĩa Đơn Chứa Bài Hát Này (Multi-Album Links)</span>
+              <span id="inspect-albums-count" class="badge badge-cyan">1 Album</span>
+            </div>
+            <div id="inspect-albums-list" class="flex-row" style="flex-wrap: wrap; gap: 8px;">
+              <span style="font-size: 11px; color: var(--text-dim);">Chưa có liên kết album bổ sung.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Raw MongoDB JSON Document -->
+        <div id="tab-inspect-json" class="inspector-tab-content flex-col" style="display: none;">
+          <div class="flex-between mb-2">
+            <span style="font-size: 11.5px; color: var(--text-muted);">Định dạng JSON Schema chuẩn lưu trữ trực tiếp trong MongoDB:</span>
+            <button id="btn-copy-raw-json" class="btn btn-secondary" style="font-size: 11px; padding: 3px 8px;">📋 Copy JSON</button>
+          </div>
+          <pre id="inspect-json-viewer" class="raw-json-box">{}</pre>
+        </div>
+
+        <!-- Tab 3: Embedded ID3v2.3 MP3 Frames -->
+        <div id="tab-inspect-id3" class="inspector-tab-content flex-col" style="display: none;">
+          <div style="background: rgba(6,182,212,0.08); border: 1px solid rgba(6,182,212,0.25); border-radius: var(--radius-md); padding: 8px 12px; font-size: 11.5px;">
+            <b>🏷️ ID3v2.3 Tag Inspector:</b> Đọc trực tiếp các frame âm thanh nhúng bên trong file MP3 320k cục bộ.
+          </div>
+          <div class="table-responsive" style="max-height: 320px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 110px;">ID3 Frame</th>
+                  <th style="width: 140px;">Mô Tả Kỹ Thuật</th>
+                  <th>Giá Trị Đọc Được Từ File MP3</th>
+                </tr>
+              </thead>
+              <tbody id="inspect-id3-table-body">
+                <tr><td colspan="3" style="text-align: center; padding: 16px; color: var(--text-muted);">Chưa tải thông tin ID3...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 4: Quick Edit Metadata -->
+        <div id="tab-inspect-edit" class="inspector-tab-content flex-col" style="display: none;">
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">Tên bài hát:</label>
+              <input type="text" id="inspect-edit-name" class="input-field">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Nghệ sĩ:</label>
+              <input type="text" id="inspect-edit-artist" class="input-field">
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">Album:</label>
+              <input type="text" id="inspect-edit-album" class="input-field">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Thể loại (cách nhau bởi dấu phẩy):</label>
+              <input type="text" id="inspect-edit-genres" class="input-field">
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">Độ Hot (0-100):</label>
+              <input type="number" id="inspect-edit-popularity" class="input-field" min="0" max="100">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Kiểm duyệt:</label>
+              <select id="inspect-edit-moderation" class="input-field">
+                <option value="approved">✅ Approved</option>
+                <option value="pending">⏳ Pending</option>
+                <option value="flagged">🚩 Flagged</option>
+              </select>
+            </div>
+          </div>
+          <div class="flex-row mt-2">
+            <button id="btn-save-inspector-edit" class="btn btn-primary flex-1">💾 Lưu Cập Nhật Metadata Vào MongoDB</button>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button id="btn-footer-close-inspector" class="btn btn-secondary">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 1: Edit Track Metadata -->
+  <div id="edit-track-modal" class="modal-overlay">
+    <div class="modal-container medium">
+      <div class="modal-header">
+        <div class="modal-title text-cyan">✏️ Chỉnh Sửa Metadata Bài Hát</div>
+        <button id="btn-close-edit-track" class="modal-close">✕</button>
+      </div>
+      <div class="modal-body flex-col">
+        <input type="hidden" id="edit-spotify-id">
+        <div class="form-group">
+          <label class="form-label">Tên bài hát:</label>
+          <input type="text" id="edit-track-name" class="input-field">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nghệ sĩ / Ca sĩ (cách nhau bởi dấu phẩy):</label>
+          <input type="text" id="edit-track-artist" class="input-field">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Album:</label>
+          <input type="text" id="edit-track-album" class="input-field">
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Thể loại (Genres):</label>
+            <input type="text" id="edit-track-genres" class="input-field" placeholder="vpop, pop, ballad...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Độ hot / Phổ biến (0-100):</label>
+            <input type="number" id="edit-track-popularity" class="input-field" min="0" max="100">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-cancel-edit-track" class="btn btn-secondary">Hủy Bỏ</button>
+        <button id="btn-save-edit-track" class="btn btn-primary">💾 Lưu Thay Đổi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 3: Edit / View Synced Lyrics (.lrc) -->
+  <div id="edit-lyrics-modal" class="modal-overlay">
+    <div class="modal-container large">
+      <div class="modal-header">
+        <div class="modal-title text-purple">🎤 Trình Biên Tập Lời Bài Hát Karaoke (.lrc)</div>
+        <button id="btn-close-lyrics-modal" class="modal-close">✕</button>
+      </div>
+      <div class="modal-body flex-col">
+        <input type="hidden" id="lyrics-spotify-id">
+        <div id="lyrics-track-title-info" style="font-size: 12.5px; font-weight: 700; color: var(--text-main);">Bài hát: ...</div>
+        <div class="form-group">
+          <label class="form-label">Lời Karaoke Đồng Bộ (.lrc có timestamp [mm:ss.xx]):</label>
+          <textarea id="lyrics-synced-text" class="input-field font-mono" style="height: 260px; font-size: 11.5px; line-height: 1.5;" placeholder="[00:12.50]Dòng lời đầu tiên...&#10;[00:16.80]Dòng lời tiếp theo..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-cancel-lyrics" class="btn btn-secondary">Đóng</button>
+        <button id="btn-save-lyrics" class="btn btn-primary text-purple" style="border-color: rgba(168,85,247,0.4);">💾 Lưu Lời .lrc</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 4: Settings & Live Diagnostics Center -->
+  <div id="settings-modal" class="modal-overlay">
+    <div class="modal-container large">
+      <div class="modal-header">
+        <div class="modal-title text-cyan">⚙️ Cấu Hình Hệ Thống &amp; Test Trực Tiếp (Live Diagnostics)</div>
+        <button id="btn-close-settings-modal" class="modal-close">✕</button>
+      </div>
+      
+      <!-- Modal Tabs -->
+      <div class="flex-row" style="background: var(--bg-card-header); padding: 8px 18px; border-bottom: 1px solid var(--border-color); gap: 6px;">
+        <button class="settings-tab-btn btn btn-primary" data-tab="tab-set-spotify" style="font-size: 11.5px;">🎵 Spotify Pool &amp; Test</button>
+        <button class="settings-tab-btn btn btn-secondary" data-tab="tab-set-proxy" style="font-size: 11.5px;">🛡️ Proxy Pool &amp; Ping</button>
+        <button class="settings-tab-btn btn btn-secondary" data-tab="tab-set-ytdlp" style="font-size: 11.5px;">⚡ yt-dlp Extraction Test</button>
+        <button class="settings-tab-btn btn btn-secondary" data-tab="tab-set-engine" style="font-size: 11.5px;">🎧 Chất Lượng &amp; Engine</button>
+      </div>
+
+      <div class="modal-body">
+        
+        <!-- Tab 1: Spotify App Pool Settings -->
+        <div id="tab-set-spotify" class="settings-tab-content flex-col" style="gap: 12px;">
+          <div class="flex-between">
+            <div>
+              <div style="font-weight: 700; color: var(--accent-green); font-size: 13px;">
+                🔑 Danh Sách Kho Tài Khoản Spotify App (Credentials Pool)
+              </div>
+              <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">
+                Quản trị danh sách Client ID/Secret, phân loại theo người nạp (Owner Tag), nhận diện gói Premium và luân chuyển tài khoản
+              </div>
+            </div>
+            <button id="btn-open-add-spotify-app" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">
+              ➕ Thêm Spotify App
+            </button>
+          </div>
+
+          <!-- Form Thêm / Sửa Spotify App -->
+          <form id="form-spotify-app" class="flex-col" style="display: none; background: rgba(0,0,0,0.3); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 12px; gap: 8px;">
+            <input type="hidden" id="spapp-edit-id" value="">
+            <div class="flex-between">
+              <span id="spapp-form-title" style="font-weight: 700; color: var(--accent-green); font-size: 12px;">➕ Thêm Spotify App Mới Vào Pool</span>
+              <button type="button" id="btn-close-spapp-form" class="btn btn-secondary" style="padding: 2px 6px; font-size: 10px;">✕ Đóng</button>
+            </div>
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Tên App / Node:</label>
+                <input type="text" id="spapp-name" class="input-field" placeholder="Ví dụ: Spotify App - Khoa Luận DATN" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Tag Người Sở Hữu / Nạp (Owner):</label>
+                <input type="text" id="spapp-added-by" class="input-field" placeholder="Ví dụ: Nguyễn Văn A" value="admin" required>
+              </div>
+            </div>
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Spotify Client ID (*):</label>
+                <input type="text" id="spapp-client-id" class="input-field font-mono" placeholder="Nhập Client ID..." required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Spotify Client Secret (*):</label>
+                <input type="password" id="spapp-client-secret" class="input-field font-mono" placeholder="Nhập Client Secret..." required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">SP_DC Cookie (Dùng để xác thực &amp; nhận diện gói Premium):</label>
+              <input type="text" id="spapp-sp-dc" class="input-field font-mono" placeholder="Dán cookie sp_dc (bắt đầu bằng AQD... từ open.spotify.com)">
+              <span style="font-size: 10.5px; color: var(--text-dim); margin-top: 3px; display: block;">
+                💡 <b>Cách lấy SP_DC:</b> Đăng nhập <a href="https://open.spotify.com" target="_blank" style="color: var(--accent-green);">open.spotify.com</a> trên Chrome/Edge > Bấm F12 > Tab <b>Application</b> > Mục <b>Cookies</b> > Chọn <b>open.spotify.com</b> > Copy giá trị của <code>sp_dc</code>.
+              </span>
+            </div>
+
+            <div class="flex-row" style="background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.3); border-radius: var(--radius-sm); padding: 8px 10px; margin-top: 2px;">
+              <label class="flex-row" style="gap: 8px; align-items: center; cursor: pointer; width: 100%;">
+                <input type="checkbox" id="spapp-is-premium" style="width: 16px; height: 16px; cursor: pointer;">
+                <span style="font-size: 11.5px; font-weight: 700; color: #facc15;">👑 Đánh dấu tài khoản này là Spotify Premium (Ưu tiên chất lượng 320k)</span>
+              </label>
+            </div>
+
+            <div class="flex-row" style="justify-content: flex-end; gap: 6px; margin-top: 4px;">
+              <button type="button" id="btn-test-spapp-form" class="btn btn-secondary">⚡ Test Kết Nối Thử</button>
+              <button type="submit" id="btn-save-spapp" class="btn btn-primary">💾 Lưu Vào Database</button>
+            </div>
+            <div id="spapp-form-test-result" style="display: none; padding: 6px 10px; border-radius: var(--radius-sm); font-size: 11px;"></div>
+          </form>
+
+          <!-- Spotify Apps Table -->
+          <div class="table-responsive" style="max-height: 280px; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 40px; text-align: center;">Dùng</th>
+                  <th>Tên App &amp; Người Sở Hữu</th>
+                  <th>Client ID</th>
+                  <th style="width: 150px;">Loại Tài Khoản</th>
+                  <th style="width: 110px;">Trạng Thái &amp; Ping</th>
+                  <th style="width: 150px; text-align: center;">Hành Động</th>
+                </tr>
+              </thead>
+              <tbody id="spotify-apps-table-body">
+                <tr><td colspan="6" class="text-center text-dim" style="padding: 20px;">⏳ Đang tải danh sách Spotify Apps...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 2: Proxy Pool & Live Speed Diagnostics -->
+        <div id="tab-set-proxy" class="settings-tab-content flex-col" style="display: none; gap: 12px;">
+          <div class="flex-between">
+            <div>
+              <div style="font-weight: 700; color: var(--accent-cyan); font-size: 13px;">
+                🛡️ Quản Trị Proxy Pool Đa Giao Thức (HTTP / HTTPS / SOCKS4 / SOCKS5)
+              </div>
+              <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">
+                Thêm, sửa, xóa, đo tốc độ ping thực tế và tự động luân chuyển trong tiến trình cào &amp; tải MP3
+              </div>
+            </div>
+            <div class="flex-row" style="gap: 6px; width: auto;">
+              <button id="btn-test-all-proxies" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; border-color: var(--accent-cyan); color: var(--accent-cyan);">
+                ⚡ Test Toàn Bộ Proxy (Ping All)
+              </button>
+              <button id="btn-open-add-proxy" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">
+                ➕ Thêm Proxy Mới
+              </button>
+            </div>
+          </div>
+
+          <!-- Form Thêm / Sửa Proxy -->
+          <form id="form-proxy" class="flex-col" style="display: none; background: rgba(0,0,0,0.3); border: 1px solid var(--accent-cyan); border-radius: var(--radius-md); padding: 12px; gap: 8px;">
+            <input type="hidden" id="proxy-edit-id" value="">
+            <div class="flex-between">
+              <span id="proxy-form-title" style="font-weight: 700; color: var(--accent-cyan); font-size: 12px;">➕ Thêm Proxy Mới Vào Pool</span>
+              <button type="button" id="btn-close-proxy-form" class="btn btn-secondary" style="padding: 2px 6px; font-size: 10px;">✕ Đóng</button>
+            </div>
+            
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Tên / Ghi chú Proxy:</label>
+                <input type="text" id="proxy-name" class="input-field" placeholder="Ví dụ: Proxy Sài Gòn Node 1">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Tag Người Nạp (Owner):</label>
+                <input type="text" id="proxy-added-by" class="input-field" placeholder="admin" value="admin">
+              </div>
+            </div>
+
+            <div class="flex-row" style="gap: 8px;">
+              <div class="form-group" style="width: 140px;">
+                <label class="form-label">Loại Proxy (*):</label>
+                <select id="proxy-protocol" class="input-field">
+                  <option value="http" selected>HTTP</option>
+                  <option value="https">HTTPS</option>
+                  <option value="socks5">SOCKS5</option>
+                  <option value="socks4">SOCKS4</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex: 2;">
+                <label class="form-label">Host / Địa chỉ IP (*):</label>
+                <input type="text" id="proxy-host" class="input-field font-mono" placeholder="127.0.0.1 hoặc proxy.domain.com" required>
+              </div>
+              <div class="form-group" style="width: 100px;">
+                <label class="form-label">Port (*):</label>
+                <input type="number" id="proxy-port" class="input-field font-mono" placeholder="1080" value="8080" required>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Username (Tùy chọn):</label>
+                <input type="text" id="proxy-username" class="input-field font-mono" placeholder="Để trống nếu không có">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Password (Tùy chọn):</label>
+                <input type="password" id="proxy-password" class="input-field font-mono" placeholder="Để trống nếu không có">
+              </div>
+            </div>
+
+            <div class="flex-row" style="justify-content: flex-end; gap: 6px; margin-top: 4px;">
+              <button type="button" id="btn-test-proxy-form" class="btn btn-secondary">⚡ Đo Tốc Độ (Ping Test)</button>
+              <button type="submit" id="btn-save-proxy-item" class="btn btn-primary">💾 Lưu Proxy Vào DB</button>
+            </div>
+            <div id="proxy-form-test-result" style="display: none; padding: 6px 10px; border-radius: var(--radius-sm); font-size: 11px;"></div>
+          </form>
+
+          <!-- Proxies Table -->
+          <div class="table-responsive" style="max-height: 280px; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 50px; text-align: center;">Bật/Tắt</th>
+                  <th style="width: 80px;">Loại</th>
+                  <th>Địa Chỉ Proxy &amp; Ghi Chú</th>
+                  <th style="width: 100px;">Người Nạp</th>
+                  <th style="width: 120px;">Tốc Độ (Ping)</th>
+                  <th style="width: 140px; text-align: center;">Hành Động</th>
+                </tr>
+              </thead>
+              <tbody id="proxies-table-body">
+                <tr><td colspan="6" class="text-center text-dim" style="padding: 20px;">⏳ Đang tải danh sách Proxies...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 3: yt-dlp Extraction Test -->
+        <div id="tab-set-ytdlp" class="settings-tab-content flex-col" style="display: none;">
+          <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); padding: 8px 12px; border-radius: var(--radius-md); font-size: 11.5px;">
+            <b>⚡ Trích xuất trực tiếp:</b> Test khả năng tìm kiếm và trích xuất audio từ YouTube trên server.
+          </div>
+          <div class="form-group">
+            <label class="form-label">Từ khóa hoặc Link YouTube test:</label>
+            <input type="text" id="set-ytdlp-query" class="input-field" value="Sơn Tùng M-TP Đừng Làm Trái Tim Anh Đau">
+          </div>
+          <button id="btn-test-ytdlp" class="btn btn-secondary">⚡ Test Trích Xuất yt-dlp (No Download)</button>
+          <div id="test-ytdlp-result-box" style="display: none; padding: 8px 12px; border-radius: var(--radius-md); font-size: 11.5px;"></div>
+        </div>
+
+        <!-- Tab 4: Audio Engine & Storage -->
+        <div id="tab-set-engine" class="settings-tab-content flex-col" style="display: none;">
+          <form id="form-system-engine-settings" class="flex-col">
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Chất lượng âm thanh (Bitrate):</label>
+                <select id="set-audio-bitrate" class="input-field">
+                  <option value="320k">320 kbps MP3 (Cao cấp nhất - Mặc định)</option>
+                  <option value="256k">256 kbps MP3 (Chuẩn Studio)</option>
+                  <option value="192k">192 kbps MP3 (Tiết kiệm dung lượng)</option>
+                  <option value="128k">128 kbps MP3 (Siêu nhẹ)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Độ trễ giữa các bài (Delay):</label>
+                <input type="number" id="set-download-delay" class="input-field" value="5.0" step="0.5" min="1" max="30">
+              </div>
+            </div>
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Số bài tải đồng thời (Batch Size):</label>
+                <input type="number" id="set-batch-size" class="input-field" value="5" min="1" max="20">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Thời gian nghỉ (Cooldown giây):</label>
+                <input type="number" id="set-cooldown" class="input-field" value="10" min="0" max="120">
+              </div>
+            </div>
+            <div class="flex-row">
+              <label class="switch"><input type="checkbox" id="set-force-youtube-music" checked><span class="slider"></span></label>
+              <span style="font-size: 11.5px; color: var(--text-muted);">Ưu tiên nguồn YouTube Music (Chất lượng audio cao hơn)</span>
+            </div>
+            <div class="flex-row mt-4">
+              <button type="submit" id="btn-save-engine" class="btn btn-primary">💾 Lưu Cấu Hình Engine</button>
+            </div>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 5: Team Management & Leaderboard Modal -->
+  <div id="team-modal" class="modal-overlay">
+    <div class="modal-container large">
+      <div class="modal-header">
+        <div class="modal-title text-purple">👥 Quản Trị Nhóm, Phân Quyền &amp; Bảng Xếp Hạng</div>
+        <button id="btn-close-team-modal" class="modal-close">✕</button>
+      </div>
+
+      <!-- Team Tabs -->
+      <div class="flex-row" style="background: var(--bg-card-header); padding: 8px 18px; border-bottom: 1px solid var(--border-color); gap: 6px;">
+        <button class="team-tab-btn btn btn-primary" data-tab="tab-team-leaderboard" style="font-size: 11.5px;">🏆 Bảng Đóng Góp</button>
+        <button class="team-tab-btn btn btn-secondary" data-tab="tab-team-logs" style="font-size: 11.5px;">📜 Nhật Ký Audit</button>
+        <button class="team-tab-btn btn btn-secondary" data-tab="tab-team-create" style="font-size: 11.5px;">➕ Cấp Tài Khoản</button>
+      </div>
+
+      <div class="modal-body">
+        
+        <!-- Tab 1: Leaderboard -->
+        <div id="tab-team-leaderboard" class="team-tab-content">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Thành Viên</th>
+                  <th>Vai Trò</th>
+                  <th style="text-align: center;">Bài Đã Cào</th>
+                  <th style="text-align: center;">Bài Đã Tải</th>
+                  <th style="text-align: center;">Direct Link</th>
+                  <th>Hành Động Cuối</th>
+                  <th style="text-align: center;">Trạng Thái</th>
+                </tr>
+              </thead>
+              <tbody id="team-leaderboard-body">
+                <tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--text-muted);">Đang tải dữ liệu thành viên...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 2: Activity Logs -->
+        <div id="tab-team-logs" class="team-tab-content" style="display: none;">
+          <div id="team-activity-logs-list" class="flex-col" style="max-height: 320px; overflow-y: auto;">
+            <!-- Dynamic logs -->
+          </div>
+        </div>
+
+        <!-- Tab 3: Admin Create User -->
+        <div id="tab-team-create" class="team-tab-content" style="display: none;">
+          <form id="form-admin-create-user" class="flex-col">
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Tên hiển thị:</label>
+                <input type="text" id="new-user-display" class="input-field" placeholder="Ví dụ: Nguyễn Văn A" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Tên đăng nhập (Username):</label>
+                <input type="text" id="new-user-username" class="input-field" placeholder="nguyenvana" required>
+              </div>
+            </div>
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Mật khẩu:</label>
+                <input type="password" id="new-user-password" class="input-field" placeholder="••••••••" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Vai trò (Role):</label>
+                <select id="new-user-role" class="input-field">
+                  <option value="collector">Collector (Thành viên cào nhạc)</option>
+                  <option value="moderator">Moderator (Kiểm duyệt viên)</option>
+                  <option value="admin">Admin (Quản trị viên toàn quyền)</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-top: 8px;">➕ Tạo Tài Khoản Thành Viên</button>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 6: Headless Cookie Configuration Modal -->
+  <div id="cookie-modal" class="modal-overlay">
+    <div class="modal-container medium">
+      <div class="modal-header">
+        <div class="modal-title text-yellow">🍪 Cấu Hình Cookies Headless Cho YouTube/Spotify</div>
+        <button id="btn-close-cookie-modal" class="modal-close">✕</button>
+      </div>
+      <div class="modal-body flex-col">
+        <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); padding: 8px 12px; border-radius: var(--radius-md); font-size: 11.5px;">
+          <b>💡 Cookies giải quyết triệt để Bot Detection / 429 Rate Limit:</b> Tải file Netscape <code>cookies.txt</code> hoặc dán trực tiếp.
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Tải lên file cookies.txt:</label>
+          <div class="flex-row">
+            <input type="file" id="input-cookie-file" accept=".txt" class="input-field" style="padding: 4px;">
+            <button id="btn-upload-cookie-file" class="btn btn-primary">Tải Lên</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Hoặc Dán Nội Dung Text Cookies (Netscape format):</label>
+          <textarea id="input-cookie-text" class="input-field font-mono" style="height: 120px; font-size: 11px;" placeholder="# Netscape HTTP Cookie File&#10;.youtube.com TRUE / FALSE 1780000000 ..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-save-cookie-text" class="btn btn-primary">💾 Áp Dụng Cookies</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 7: System Guide & Documentation Modal -->
+  <div id="guide-modal" class="modal-overlay">
+    <div class="modal-container large">
+      <div class="modal-header">
+        <div class="modal-title text-green">📖 Hướng Dẫn Sử Dụng Toàn Diện Hệ Thống</div>
+        <button class="modal-close" onclick="document.getElementById('guide-modal').style.display='none'">✕</button>
+      </div>
+      <div class="modal-body flex-col" style="font-size: 12.5px; line-height: 1.6;">
+        <h4 style="color: var(--accent-cyan); margin-bottom: 4px;">1. Quy Trình Thu Thập &amp; Cào Nhạc (Sourcing Pipeline)</h4>
+        <p class="text-muted">Hệ thống hỗ trợ 6 chế độ cào linh hoạt: Curated Playlists (12 thể loại chuẩn), Nghệ Sĩ / Nhạc Sĩ, Album, Tìm kiếm từ khóa, Spotify Link và Direct URL (YouTube, SoundCloud). Bấm <b>Xem Trước &amp; Chọn Lọc</b> để chọn lọc các bài hát trước khi lưu vào DB.</p>
+        
+        <h4 style="color: var(--accent-green); margin-top: 10px; margin-bottom: 4px;">2. Tải Audio MP3 320k &amp; Lời Karaoke .lrc Đồng Bộ</h4>
+        <p class="text-muted">Bấm <b>Start Download</b> để kích hoạt luồng tải batch tự động bằng engine yt-dlp &amp; spotDL. Bitrate mặc định là 320 kbps MP3 cao cấp kèm lyric karaoke lrc có timestamp.</p>
+
+        <h4 style="color: var(--accent-purple); margin-top: 10px; margin-bottom: 4px;">3. Quản Trị Kho Dữ Liệu, Tra Cứu Metadata &amp; Kiểm Duyệt (Catalog Studio)</h4>
+        <p class="text-muted">Trang Catalog cho phép lọc theo thể loại, trạng thái tải audio, người thêm (Collector), loại nạp (Metadata Only vs Audio), trạng thái kiểm duyệt, tra cứu toàn bộ cây metadata (Visual, Raw MongoDB JSON, ID3 tag frames), nghe trực tiếp bài hát bằng In-App Player và biên tập lời .lrc.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="document.getElementById('guide-modal').style.display='none'">Đã Hiểu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 8: System Activity & Audit Logs Modal -->
+  <div id="audit-log-modal" class="modal-overlay">
+    <div class="modal-container large" style="max-width: 1080px; width: 95vw;">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title text-green">📜 Nhật Ký Hoạt Động &amp; Audit Logs Hệ Thống (Xem Nhanh)</div>
+          <div class="modal-subtitle">Ghi nhận minh bạch mọi thao tác Thêm, Sửa, Xóa, Cào, Tải, Duyệt và Lưu trữ lâu dài trong MongoDB</div>
+        </div>
+        <div class="flex-row" style="gap: 6px; width: auto; align-items: center;">
+          <button id="btn-modal-open-full-logs" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; border-color: var(--accent-green); color: var(--accent-green);">
+            🔗 Mở Trang Toàn Bộ Nhật Ký ↗
+          </button>
+          <button id="btn-close-audit-modal" class="modal-close">✕</button>
+        </div>
+      </div>
+
+      <div class="modal-body flex-col" style="gap: 12px;">
+        <!-- Audit Filters Bar -->
+        <div class="flex-row" style="flex-wrap: wrap; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 12px; gap: 8px;">
+          <input type="text" id="audit-search" class="input-field" placeholder="🔍 Tìm kiếm log (mô tả, target, ID)..." style="flex: 1; min-width: 180px;">
+          
+          <select id="audit-filter-user" class="input-field" style="width: 130px;">
+            <option value="all">👤 Tất cả User</option>
+          </select>
+
+          <select id="audit-filter-action" class="input-field" style="width: 160px;">
+            <option value="all">⚡ Tất cả Hành Động</option>
+            <option value="ADD_TRACK">➕ ADD_TRACK</option>
+            <option value="UPDATE_TRACK">✏️ UPDATE_TRACK</option>
+            <option value="DELETE_TRACK">🗑️ DELETE_TRACK</option>
+            <option value="BULK_DELETE">🗑️ BULK_DELETE</option>
+            <option value="MODERATE_TRACKS">🛡️ MODERATE</option>
+            <option value="CRAWL_METADATA">🕷️ CRAWL_METADATA</option>
+            <option value="IMPORT_TRACKS">📥 IMPORT_TRACKS</option>
+            <option value="DOWNLOAD_AUDIO">⚡ DOWNLOAD_AUDIO</option>
+            <option value="REDOWNLOAD_TRACK">🔄 REDOWNLOAD</option>
+            <option value="DIRECT_URL_INGEST">🌐 DIRECT_URL</option>
+            <option value="UPDATE_SETTINGS">⚙️ UPDATE_SETTINGS</option>
+          </select>
+
+          <select id="audit-filter-status" class="input-field" style="width: 130px;">
+            <option value="all">📊 Tất cả Status</option>
+            <option value="SUCCESS">✅ SUCCESS</option>
+            <option value="FAILED">❌ FAILED</option>
+            <option value="WARNING">⚠️ WARNING</option>
+          </select>
+
+          <button id="btn-refresh-audit-logs" class="btn btn-secondary" style="padding: 6px 12px;">🔄 Làm Mới</button>
+          <button id="btn-export-audit-logs" class="btn btn-primary" style="padding: 6px 12px;">📥 Xuất JSON Logs</button>
+        </div>
+
+        <!-- Audit Table -->
+        <div class="table-responsive" style="max-height: 420px; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 140px;">Thời Gian</th>
+                <th style="width: 100px;">Người Làm</th>
+                <th style="width: 140px;">Hành Động</th>
+                <th style="width: 90px;">Trạng Thái</th>
+                <th>Chi Tiết Hoạt Động</th>
+                <th style="width: 140px;">Đối Tượng (Target)</th>
+              </tr>
+            </thead>
+            <tbody id="audit-logs-table-body">
+              <tr>
+                <td colspan="6" class="text-center text-dim" style="padding: 24px;">⏳ Đang tải nhật ký hệ thống...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Audit Pagination -->
+        <div class="flex-between" style="font-size: 11.5px; color: var(--text-dim);">
+          <span id="audit-pagination-info">Hiển thị 0 - 0 của 0 logs</span>
+          <div class="flex-row">
+            <button id="audit-btn-prev" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">◀ Trước</button>
+            <span id="audit-page-label" style="font-weight: 700; color: var(--text-main); padding: 0 6px;">Trang 1 / 1</span>
+            <button id="audit-btn-next" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">Sau ▶</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 9: General Confirmation Dialog -->
+  <div id="confirm-modal" class="modal-overlay" style="z-index: 1050;">
+    <div class="modal-container" style="max-width: 440px;">
+      <div class="modal-header">
+        <div class="modal-title text-red">⚠️ Xác Nhận Thao Tác Dữ Liệu</div>
+        <button id="btn-close-confirm-modal" class="modal-close">✕</button>
+      </div>
+      <div class="modal-body flex-col" style="gap: 12px; font-size: 13px;">
+        <div id="confirm-modal-message" style="color: var(--text-main); line-height: 1.5;">
+          Bạn có chắc chắn muốn thực hiện thao tác này?
+        </div>
+        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-md); padding: 8px 12px; font-size: 11.5px; color: #fca5a5;">
+          ⚠️ <b>Lưu ý an toàn:</b> Thao tác xóa sẽ đồng thời xóa vĩnh viễn dữ liệu trên MongoDB và file âm thanh MP3 / lời .lrc trên ổ đĩa.
+        </div>
+      </div>
+      <div class="modal-footer flex-row" style="justify-content: flex-end; gap: 8px;">
+        <button id="btn-confirm-cancel" class="btn btn-secondary">Hủy Bỏ</button>
+        <button id="btn-confirm-proceed" class="btn btn-danger" style="background: var(--accent-red); border-color: var(--accent-red); color: white;">Xác Nhận Xóa</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 10: Manual Add Track Modal -->
+  <div id="add-track-modal" class="modal-overlay">
+    <div class="modal-container medium">
+      <div class="modal-header">
+        <div class="modal-title text-cyan">➕ Thêm Bài Hát Mới Vào Kho Dữ Liệu</div>
+        <button id="btn-close-add-track-modal" class="modal-close">✕</button>
+      </div>
+      <form id="form-add-new-track" class="modal-body flex-col" style="gap: 10px;">
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Tên bài hát (*):</label>
+            <input type="text" id="add-track-name" class="input-field" placeholder="Ví dụ: Cắt Đôi Nỗi Sầu" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nghệ sĩ / Ca sĩ (*):</label>
+            <input type="text" id="add-track-artist" class="input-field" placeholder="Ví dụ: Tăng Duy Tân" required>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Album:</label>
+            <input type="text" id="add-track-album" class="input-field" placeholder="Single" value="Single">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Thời lượng (Giây):</label>
+            <input type="number" id="add-track-duration" class="input-field" value="180" min="1" max="3600">
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Thể loại:</label>
+            <select id="add-track-genre" class="input-field">
+              <option value="vpop">V-Pop</option>
+              <option value="pop">Pop</option>
+              <option value="indie">Indie</option>
+              <option value="ballad">Ballad</option>
+              <option value="rock">Rock</option>
+              <option value="hiphop">Hip-Hop / Rap</option>
+              <option value="rnb">R&amp;B</option>
+              <option value="jazz">Jazz</option>
+              <option value="acoustic">Acoustic</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Độ phổ biến (0 - 100):</label>
+            <input type="number" id="add-track-popularity" class="input-field" value="65" min="0" max="100">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">URL Ảnh bìa (Cover Image):</label>
+          <input type="url" id="add-track-image" class="input-field" placeholder="https://... hoặc để trống dùng ảnh mặc định">
+        </div>
+
+        <div class="modal-footer flex-row" style="justify-content: flex-end; gap: 8px; margin-top: 10px;">
+          <button type="button" id="btn-cancel-add-track" class="btn btn-secondary">Hủy Bỏ</button>
+          <button type="submit" id="btn-save-new-track" class="btn btn-primary">💾 Lưu Bài Hát Vào DB</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/js/main.js"></script>
+</body>
+</html>

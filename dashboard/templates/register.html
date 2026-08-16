@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng Ký Thành Viên | Music Data Collector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: radial-gradient(circle at 50% 20%, #1e1e38 0%, #0d0e15 100%);
+    }
+    .auth-card {
+      width: 100%;
+      max-width: 440px;
+      background: rgba(24, 25, 38, 0.85);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 36px 32px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+    }
+    .auth-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .auth-title {
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #06b6d4 0%, #a855f7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+    .auth-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .form-input {
+      width: 100%;
+      padding: 11px 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-size: 14px;
+      box-sizing: border-box;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .form-input:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
+    }
+    .auth-btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #06b6d4, #a855f7);
+      color: #fff;
+      font-weight: 700;
+      border: none;
+      border-radius: 8px;
+      font-size: 14.5px;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: all 0.2s;
+    }
+    .auth-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(168, 85, 247, 0.4);
+    }
+    .auth-footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .auth-footer a {
+      color: var(--accent-cyan);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .alert-box {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-card">
+    <div class="auth-header">
+      <div style="font-size: 32px; margin-bottom: 8px;">✨</div>
+      <div class="auth-title">Đăng Ký Thành Viên</div>
+      <div class="auth-subtitle">Tạo tài khoản tham gia cào & đóng góp nhạc vào CSDL ĐATN</div>
+    </div>
+
+    {% if error %}
+    <div class="alert-box">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/register">
+      <div class="form-group">
+        <label>Tên đăng nhập (Username):</label>
+        <input type="text" name="username" class="form-input" placeholder="Ví dụ: hai_nguyen, dev_music..." required autofocus>
+      </div>
+
+      <div class="form-group">
+        <label>Email liên hệ:</label>
+        <input type="email" name="email" class="form-input" placeholder="ten@domain.com">
+      </div>
+
+      <div class="form-group">
+        <label>Mật khẩu:</label>
+        <input type="password" name="password" class="form-input" placeholder="Tối thiểu 6 ký tự..." required minlength="6">
+      </div>
+
+      <button type="submit" class="auth-btn">🎉 Tạo Tài Khoản</button>
+    </form>
+
+    <div class="auth-footer">
+      Đã có tài khoản? <a href="/login">Đăng nhập ngay</a>
+    </div>
+  </div>
+</body>
+</html>

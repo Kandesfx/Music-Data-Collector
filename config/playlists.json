@@ -1,0 +1,89 @@
+{
+  "description": "Curated Spotify Playlists for Music Data Collection",
+  "playlists": [
+    {
+      "name": "Today's Top Hits",
+      "genre": "pop",
+      "url": "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M",
+      "target_tracks": 50,
+      "description": "Global pop and trending hits"
+    },
+    {
+      "name": "Vietnam Top 50",
+      "genre": "vpop",
+      "url": "https://open.spotify.com/playlist/37i9dQZEVXbLdGSmz6xilI",
+      "target_tracks": 50,
+      "description": "Top tracks in Vietnam"
+    },
+    {
+      "name": "Global Top 50",
+      "genre": "pop",
+      "url": "https://open.spotify.com/playlist/37i9dQZEVXbMDoHDwVN2tF",
+      "target_tracks": 50,
+      "description": "Most played tracks globally"
+    },
+    {
+      "name": "RapCaviar",
+      "genre": "hiphop",
+      "url": "https://open.spotify.com/playlist/37i9dQZF1DX0XUsuxWHRQd",
+      "target_tracks": 50,
+      "description": "Hip hop and rap hits"
+    },
+    {
+      "name": "Rock This",
+      "genre": "rock",
+      "url": "https://open.spotify.com/playlist/37i9dQZF1DXcF6B6QPhFDv",
+      "target_tracks": 50,
+      "description": "Modern and classic rock"
+    },
+    {
+      "name": "mint",
+      "genre": "electronic",
+      "url": "https://open.spotify.com/playlist/37i9dQZF1DX4dyzvuaRJ0n",
+      "target_tracks": 50,
+      "description": "EDM and electronic dance music"
+    },
+    {
+      "name": "K-Pop ON!",
+      "genre": "kpop",
+      "url": "https://open.spotify.com/playlist/37i9dQZF1DX9tPFwDMOaN1",
+      "target_tracks": 50,
+      "description": "Top K-Pop tracks"
+    },
+    {
+      "name": "Are & Be",
+      "genre": "rnb",
+      "url": "https://open.spotify.com/playlist/37i9dQZF1DX4SBhb3fqCJd",
+      "target_tracks": 50,
+      "description": "R&B and Soul tracks"
+    },
+    {
+      "name": "Jazz Vibes",
+      "genre": "jazz",
+      "url": "https://open.spotify.com/playlist/37i9dQZF1DX0SM0LYsmbMT",
+      "target_tracks": 50,
+      "description": "Jazz and relaxed grooves"
+    },
+    {
+      "name": "Chill Hits",
+      "genre": "ambient",
+      "url": "https://open.spotify.com/playlist/37i9dQZF1DX4WYpdgoIcn6",
+      "target_tracks": 50,
+      "description": "Acoustic and chillout songs"
+    },
+    {
+      "name": "Hot Country",
+      "genre": "country",
+      "url": "https://open.spotify.com/playlist/37i9dQZF1DX1lVhptIYRda",
+      "target_tracks": 50,
+      "description": "Country music hits"
+    },
+    {
+      "name": "Peaceful Piano",
+      "genre": "classical",
+      "url": "https://open.spotify.com/playlist/37i9dQZF1DX4sWSpwq3LiO",
+      "target_tracks": 50,
+      "description": "Classical and soothing piano music"
+    }
+  ]
+}

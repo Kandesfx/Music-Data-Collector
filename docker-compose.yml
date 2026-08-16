@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: music_collector_app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/music_streaming
+      - PYTHONUTF8=1
+      - PYTHONIOENCODING=utf-8
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+    depends_on:
+      - mongodb
+
+  mongodb:
+    image: mongo:7.0
+    container_name: music_collector_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:

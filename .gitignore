@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Secrets & Environment Variables (CRITICAL)
+.env
+.env.local
+config/.env
+*.pem
+*.key
+*.ppk
+*.db
+*.sqlite
+*.sqlite3
+
+# Runtime Audio & Large Storage Data (Keep folders, exclude huge downloaded mp3s)
+data/audio/*
+!data/audio/.gitkeep
+data/images/artists/*
+!data/images/artists/.gitkeep
+data/images/albums/*
+!data/images/albums/.gitkeep
+data/temp/*
+!data/temp/.gitkeep
+data/sessions/*
+!data/sessions/.gitkeep
+data/lyrics/*
+!data/lyrics/.gitkeep
+data/raw/*
+!data/raw/.gitkeep
+data/exports/*
+!data/exports/.gitkeep
+
+# Logs
+logs/*.log
+!logs/.gitkeep
+
+# IDE & OS Files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

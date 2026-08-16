@@ -1,0 +1,99 @@
+name: CI/CD - Deploy to Oracle Cloud (OCI)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  # ─── 1. Continuous Integration (Lint & Test) ────────────────
+  build_and_test:
+    name: 🧪 Build & Lint Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: 🔍 Test Core Python Module Imports & Syntax
+        run: |
+          python -m compileall src/ dashboard/
+          python -c "from src.processors.data_cleaner import DataCleaner; from src.processors.genre_mapper import GenreMapper; print('Core modules validated successfully.')"
+
+      - name: 🌐 Validate Frontend JavaScript Syntax
+        run: |
+          node --check dashboard/static/js/main.js
+
+  # ─── 2. Continuous Deployment (SSH to OCI Server) ───────────
+  deploy_to_oci:
+    name: 🚀 Deploy to Oracle Cloud (OCI)
+    needs: build_and_test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: 🔑 Execute Remote SSH Deployment on OCI
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USERNAME }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          port: ${{ secrets.OCI_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -e
+            PROJECT_DIR="/opt/music-data-collector"
+            REPO_URL="https://github.com/${{ github.repository }}.git"
+
+            echo "=========================================================="
+            echo "🚀 [CI/CD] Bắt đầu tự động cập nhật mã nguồn trên OCI..."
+            echo "Commit: ${{ github.sha }}"
+            echo "Branch: ${{ github.ref_name }}"
+            echo "=========================================================="
+
+            # 1. Clone repository if directory is empty, else pull latest
+            if [ ! -d "$PROJECT_DIR/.git" ]; then
+                echo "📦 First-time deployment: Cloning repository..."
+                sudo mkdir -p "$PROJECT_DIR"
+                sudo chown -R $USER:$USER "$PROJECT_DIR"
+                git clone "$REPO_URL" "$PROJECT_DIR"
+                cd "$PROJECT_DIR"
+            else
+                echo "🔄 Pulling latest commit from origin/${{ github.ref_name }}..."
+                cd "$PROJECT_DIR"
+                git fetch --all
+                git reset --hard "origin/${{ github.ref_name }}"
+            fi
+
+            # 2. Run Automated Setup & Service Refresh
+            chmod +x deploy/setup_oci.sh
+            bash deploy/setup_oci.sh
+
+            # 3. Restart Application Service
+            sudo systemctl restart music-collector.service
+            sleep 2
+
+            # 4. Check Health Status
+            SERVICE_STATUS=$(sudo systemctl is-active music-collector.service)
+            if [ "$SERVICE_STATUS" = "active" ]; then
+                echo "=========================================================="
+                echo "🎉 [CI/CD] DEPLOY THÀNH CÔNG! SERVICE ĐANG CHẠY ACTIVE!"
+                echo "=========================================================="
+            else
+                echo "❌ Service failed to start! Status: $SERVICE_STATUS"
+                sudo journalctl -u music-collector.service -n 30 --no-pager
+                exit 1
+            fi

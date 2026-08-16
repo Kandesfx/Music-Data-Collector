@@ -1,0 +1,96 @@
+{
+  "genres": [
+    {
+      "tag": "pop",
+      "display_name": "Pop",
+      "description": "Popular music",
+      "target_tracks": 200
+    },
+    {
+      "tag": "rock",
+      "display_name": "Rock",
+      "description": "Rock music",
+      "target_tracks": 200
+    },
+    {
+      "tag": "electronic",
+      "display_name": "Electronic",
+      "description": "Electronic and EDM music",
+      "target_tracks": 150
+    },
+    {
+      "tag": "hiphop",
+      "display_name": "Hip Hop",
+      "description": "Hip hop and rap music",
+      "target_tracks": 100
+    },
+    {
+      "tag": "jazz",
+      "display_name": "Jazz",
+      "description": "Jazz music",
+      "target_tracks": 100
+    },
+    {
+      "tag": "classical",
+      "display_name": "Classical",
+      "description": "Classical music",
+      "target_tracks": 80
+    },
+    {
+      "tag": "rnb",
+      "display_name": "R&B",
+      "description": "Rhythm and Blues",
+      "target_tracks": 80
+    },
+    {
+      "tag": "metal",
+      "display_name": "Metal",
+      "description": "Heavy metal music",
+      "target_tracks": 80
+    },
+    {
+      "tag": "folk",
+      "display_name": "Folk",
+      "description": "Folk and acoustic music",
+      "target_tracks": 60
+    },
+    {
+      "tag": "reggae",
+      "display_name": "Reggae",
+      "description": "Reggae music",
+      "target_tracks": 50
+    },
+    {
+      "tag": "blues",
+      "display_name": "Blues",
+      "description": "Blues music",
+      "target_tracks": 50
+    },
+    {
+      "tag": "country",
+      "display_name": "Country",
+      "description": "Country music",
+      "target_tracks": 50
+    },
+    {
+      "tag": "latin",
+      "display_name": "Latin",
+      "description": "Latin music",
+      "target_tracks": 50
+    },
+    {
+      "tag": "ambient",
+      "display_name": "Ambient",
+      "description": "Ambient and chill music",
+      "target_tracks": 50
+    },
+    {
+      "tag": "indie",
+      "display_name": "Indie",
+      "description": "Independent music",
+      "target_tracks": 50
+    }
+  ],
+  "total_target": 1350,
+  "notes": "Adjust target_tracks per genre based on availability. Jamendo may have fewer tracks for some genres."
+}
