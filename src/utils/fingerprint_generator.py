@@ -488,8 +488,8 @@ class FingerprintGenerator:
         proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
 
         start_time = time.perf_counter()
-        test_url = "https://httpbin.org/headers"
-        fallback_url = "https://www.google.com"
+        test_url = "https://www.google.com/generate_204"
+        fallback_url = "https://1.1.1.1"
 
         screen = prof.get("screen") or {"width": 1920, "height": 1080, "devicePixelRatio": 1.0}
         webgl = prof.get("webgl") or {"unmasked_vendor": "Google Inc.", "unmasked_renderer": "ANGLE (NVIDIA)"}
@@ -516,6 +516,8 @@ class FingerprintGenerator:
 
         try:
             resp = requests.get(test_url, headers=headers, proxies=proxies, timeout=timeout)
+            if resp.status_code >= 500:
+                resp = requests.get(fallback_url, headers=headers, proxies=proxies, timeout=timeout)
             latency_ms = int((time.perf_counter() - start_time) * 1000)
             checks["tls_handshake"] = True
             checks["http_status"] = resp.status_code
