@@ -83,6 +83,121 @@ socket.on("progress_update", (data) => {
   }
 });
 
+// ─── Multi-Job Parallel Worker Queue UI Renderer ─────────────
+const activeJobsListEl = document.getElementById("active-jobs-list");
+const activeJobsBadge = document.getElementById("active-jobs-badge");
+
+function renderActiveJobs(jobs = []) {
+  if (!activeJobsListEl) return;
+
+  if (activeJobsBadge) {
+    activeJobsBadge.textContent = `${jobs.length} RUNNING`;
+    activeJobsBadge.className = jobs.length > 0 ? "badge badge-success font-mono" : "badge badge-info font-mono";
+  }
+
+  if (jobs.length === 0) {
+    activeJobsListEl.innerHTML = `
+      <div class="text-dim" style="font-size: 11.5px; text-align: center; padding: 12px 0;">
+        🟢 Không có tác vụ chạy ngầm. Hệ thống sẵn sàng tiếp nhận tiến trình cào &amp; tải song song từ nhiều người dùng.
+      </div>
+    `;
+    return;
+  }
+
+  activeJobsListEl.innerHTML = jobs.map((job) => {
+    const prog = job.progress || {};
+    const percent = prog.percent || 0;
+    const isPaused = job.status === "paused";
+    const typeIcon = job.job_type === "crawl" ? "🔍" : "🎧";
+    const statusBadge = isPaused 
+      ? `<span class="badge badge-warning" style="font-size: 9px; padding: 1px 4px;">⏸ TẠM DỪNG</span>`
+      : `<span class="badge badge-success" style="font-size: 9px; padding: 1px 4px;">🟢 ĐANG CHẠY</span>`;
+
+    return `
+      <div class="job-item-card" data-job-id="${job.job_id}" style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px;">
+        <div class="flex-between" style="font-size: 11.5px; margin-bottom: 4px;">
+          <div style="font-weight: 700; color: #60a5fa; display: flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px;">
+            <span>${typeIcon}</span>
+            <span style="overflow: hidden; text-overflow: ellipsis;">${job.task_name || 'Tác vụ'}</span>
+            <span style="font-size: 10px; color: var(--text-dim); font-weight: normal;">(@${job.operator || 'user'})</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            ${statusBadge}
+            <button class="btn btn-secondary btn-job-pause" data-job-id="${job.job_id}" data-is-paused="${isPaused}" style="padding: 2px 6px; font-size: 9.5px;" title="${isPaused ? 'Tiếp tục' : 'Tạm dừng'}">
+              ${isPaused ? '▶ Tiếp' : '⏸ Dừng'}
+            </button>
+            <button class="btn btn-danger btn-job-stop" data-job-id="${job.job_id}" style="padding: 2px 6px; font-size: 9.5px;" title="Hủy tác vụ">
+              ⏹ Hủy
+            </button>
+          </div>
+        </div>
+
+        <div style="margin: 4px 0;">
+          <div class="progress-track" style="height: 4px; background: rgba(255,255,255,0.08);">
+            <div class="progress-fill" style="width: ${percent}%; background: linear-gradient(90deg, #3b82f6, #10b981);"></div>
+          </div>
+        </div>
+
+        <div class="flex-between" style="font-size: 10px; color: var(--text-dim);">
+          <span class="job-item-text" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px;">
+            ${prog.current_item || 'Đang xử lý...'}
+          </span>
+          <span class="job-item-pct" style="font-family: monospace; font-weight: 700; color: #34d399;">
+            ${prog.current || 0}/${prog.total || 0} (${percent}%)
+          </span>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  // Attach button event listeners
+  activeJobsListEl.querySelectorAll(".btn-job-pause").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const jid = btn.getAttribute("data-job-id");
+      const isPaused = btn.getAttribute("data-is-paused") === "true";
+      const action = isPaused ? "resume" : "pause";
+      try {
+        await fetch(`/api/jobs/${jid}/${action}`, { method: "POST" });
+      } catch (err) {
+        alert("Lỗi điều khiển tác vụ: " + err.message);
+      }
+    });
+  });
+
+  activeJobsListEl.querySelectorAll(".btn-job-stop").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const jid = btn.getAttribute("data-job-id");
+      if (confirm("Bạn có chắc chắn muốn hủy tác vụ này?")) {
+        try {
+          await fetch(`/api/jobs/${jid}/stop`, { method: "POST" });
+        } catch (err) {
+          alert("Lỗi dừng tác vụ: " + err.message);
+        }
+      }
+    });
+  });
+}
+
+socket.on("active_jobs_update", (data) => {
+  renderActiveJobs(data.jobs || []);
+});
+
+socket.on("job_progress", (data) => {
+  const jid = data.job_id;
+  const prog = data.progress || {};
+  const card = document.querySelector(`.job-item-card[data-job-id="${jid}"]`);
+  if (card) {
+    const fill = card.querySelector(".progress-fill");
+    if (fill) fill.style.width = `${prog.percent || 0}%`;
+    const itemSpan = card.querySelector(".job-item-text");
+    if (itemSpan) itemSpan.textContent = prog.current_item || "";
+    const pctSpan = card.querySelector(".job-item-pct");
+    if (pctSpan) pctSpan.textContent = `${prog.current || 0}/${prog.total || 0} (${prog.percent || 0}%)`;
+  }
+});
+
 socket.on("stats_update", (data) => {
   const s = data.stats || {};
   const storage = data.storage || {};

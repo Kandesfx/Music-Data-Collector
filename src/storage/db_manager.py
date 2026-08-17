@@ -7,7 +7,7 @@ import os
 import re
 import time
 from typing import Dict, List, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 try:
@@ -431,6 +431,91 @@ class DBManager:
         if not self.is_connected():
             return []
         return list(self.db.tracks.find({"download_status": status}, {"_id": 0}).limit(limit))
+
+    def claim_tracks_for_job(
+        self,
+        job_id: str,
+        operator: str,
+        limit: int = 50,
+        status: str = "pending",
+        specific_ids: Optional[List[str]] = None,
+        ttl_minutes: int = 30,
+    ) -> List[Dict[str, Any]]:
+        """
+        Atomically partition and claim an exclusive batch of tracks for a concurrent worker job.
+        Prevents multiple concurrent workers/users from downloading the exact same tracks.
+        """
+        if not self.is_connected():
+            return []
+
+        now = datetime.utcnow()
+        claim_expires_at = now + timedelta(minutes=ttl_minutes)
+
+        if specific_ids and len(specific_ids) > 0:
+            query = {
+                "spotify_id": {"$in": specific_ids},
+                "$or": [
+                    {"claimed_job_id": {"$exists": False}},
+                    {"claimed_job_id": None},
+                    {"claimed_job_id": job_id},
+                    {"claim_expires_at": {"$lt": now}},
+                ]
+            }
+        else:
+            query = {
+                "download_status": status,
+                "$or": [
+                    {"claimed_job_id": {"$exists": False}},
+                    {"claimed_job_id": None},
+                    {"claimed_job_id": job_id},
+                    {"claim_expires_at": {"$lt": now}},
+                ]
+            }
+
+        # Find candidate tracks
+        candidates = list(self.db.tracks.find(query, {"spotify_id": 1}).sort("created_at", -1).limit(limit))
+        if not candidates:
+            return []
+
+        target_ids = [c["spotify_id"] for c in candidates if c.get("spotify_id")]
+
+        # Atomically claim target tracks for this job
+        self.db.tracks.update_many(
+            {
+                "spotify_id": {"$in": target_ids},
+                "$or": [
+                    {"claimed_job_id": {"$exists": False}},
+                    {"claimed_job_id": None},
+                    {"claimed_job_id": job_id},
+                    {"claim_expires_at": {"$lt": now}},
+                ]
+            },
+            {
+                "$set": {
+                    "claimed_job_id": job_id,
+                    "claimed_by": operator,
+                    "claimed_at": now,
+                    "claim_expires_at": claim_expires_at,
+                }
+            }
+        )
+
+        # Retrieve full track documents exclusively claimed by this job
+        claimed_tracks = list(self.db.tracks.find({"claimed_job_id": job_id, "spotify_id": {"$in": target_ids}}, {"_id": 0}))
+        return claimed_tracks
+
+    def release_job_claims(self, job_id: str) -> int:
+        """
+        Release claims on tracks that were not completed by this job (e.g. on pause, cancel, stop, or error).
+        """
+        if not self.is_connected() or not job_id:
+            return 0
+
+        res = self.db.tracks.update_many(
+            {"claimed_job_id": job_id, "download_status": {"$ne": "completed"}},
+            {"$unset": {"claimed_job_id": "", "claimed_by": "", "claimed_at": "", "claim_expires_at": ""}}
+        )
+        return res.modified_count
 
     def get_download_queue(self, status: str = "pending", genre: str = "all", limit: int = 100) -> List[Dict[str, Any]]:
         """Get list of tracks queued for audio download with optional filters."""

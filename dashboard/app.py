@@ -79,17 +79,19 @@ class PipelineController:
         FingerprintGenerator.set_db_manager(self.db)
         lock_manager.set_db_manager(self.db)
 
+        # Multi-Job Concurrent Registry
+        self.active_jobs: Dict[str, Dict[str, Any]] = {}
+        self._jobs_lock = threading.RLock()
+
         self.is_running = False
         self.is_paused = False
         self.should_stop = False
         self.active_task_name = "Idle"
         self.current_track: Optional[Dict[str, Any]] = None
-        self.worker_thread: Optional[threading.Thread] = None
 
     def handle_cookie_expired(self, service: str, error_detail: str):
         """Triggered immediately when a download fails due to expired or revoked cookies."""
-        self.is_paused = True
-        msg = f"🚨 CẢNH BÁO: Cookie {service.upper()} đã hết hạn hoặc bị đăng xuất! Pipeline đã tự động tạm dừng để bảo vệ dữ liệu."
+        msg = f"🚨 CẢNH BÁO: Cookie {service.upper()} đã hết hạn hoặc bị đăng xuất! Hãy cập nhật cookie mới trong cài đặt."
         self.log(msg, level="error")
         socketio.emit("cookie_expired_alert", {
             "service": service,
@@ -103,6 +105,40 @@ class PipelineController:
         logger.info(message)
         socketio.emit("log_entry", {"message": message, "level": level, "timestamp": time.strftime("%H:%M:%S")})
 
+    def get_active_jobs_list(self) -> List[Dict[str, Any]]:
+        """Return serialized list of all currently active concurrent jobs."""
+        with self._jobs_lock:
+            result = []
+            for jid, job in self.active_jobs.items():
+                result.append({
+                    "job_id": jid,
+                    "job_type": job.get("job_type"),
+                    "task_name": job.get("task_name"),
+                    "operator": job.get("operator"),
+                    "status": job.get("status"),
+                    "created_at": job.get("created_at"),
+                    "started_at": job.get("started_at"),
+                    "progress": job.get("progress", {}),
+                })
+            return result
+
+    def broadcast_jobs_state(self):
+        """Broadcast active jobs to all connected WebSocket clients."""
+        jobs_list = self.get_active_jobs_list()
+        self.is_running = len(jobs_list) > 0
+        if not self.is_running:
+            self.active_task_name = "Idle"
+        else:
+            self.active_task_name = f"Đang chạy ({len(jobs_list)} tác vụ song song)"
+
+        socketio.emit("active_jobs_update", {
+            "jobs": jobs_list,
+            "total_active": len(jobs_list),
+            "is_running": self.is_running,
+            "active_task_name": self.active_task_name,
+        })
+        self.broadcast_stats()
+
     def start_crawl_task(
         self,
         mode: str = "curated",
@@ -110,33 +146,39 @@ class PipelineController:
         genre: Optional[str] = None,
         limit_per_playlist: int = 50,
         operator_name: str = "admin",
-    ) -> bool:
-        """Run metadata crawling in background thread with distributed pipeline lock."""
-        # 1. Acquire global pipeline execution lock
-        acquired, lock_info = lock_manager.acquire_lock(
-            lock_name="pipeline_global_lock",
-            owner=operator_name,
-            ttl_seconds=900,
-            metadata={"task": f"Crawl [{mode.upper()}]", "query": query, "started_by": operator_name}
-        )
-        if not acquired:
-            holder = lock_info.get("owner", "user khác") if lock_info else "user khác"
-            time_left = lock_info.get("time_left_sec", 0) if lock_info else 0
-            cur_task = lock_info.get("metadata", {}).get("task", "Tác vụ khác") if lock_info else "Tác vụ khác"
-            msg = f"⚠️ XUNG ĐỘT TIẾN TRÌNH: Đang có tác vụ '{cur_task}' chạy bởi @{holder} (khóa còn hiệu lực {time_left}s). Vui lòng đợi!"
-            self.log(msg, level="warning")
-            socketio.emit("pipeline_lock_conflict", {
-                "message": msg,
-                "holder": holder,
-                "time_left_sec": time_left,
-                "task": cur_task,
-            })
-            return False
+    ) -> Dict[str, Any]:
+        """Run metadata crawling in an isolated concurrent worker job."""
+        job_id = f"job_crawl_{operator_name}_{int(time.time()*1000)}"
+        task_name = f"Crawl [{mode.upper()}]: {query or 'Curated'} ({genre or 'auto'})"
 
-        self.is_running = True
-        self.should_stop = False
-        self.is_paused = False
-        self.active_task_name = f"Crawling Metadata [{mode.upper()}]"
+        stop_event = threading.Event()
+        pause_event = threading.Event()
+
+        job_info = {
+            "job_id": job_id,
+            "job_type": "crawl",
+            "task_name": task_name,
+            "operator": operator_name,
+            "status": "running",
+            "created_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.utcnow().isoformat(),
+            "progress": {
+                "current": 0,
+                "total": limit_per_playlist,
+                "percent": 0,
+                "current_item": "Khởi động...",
+                "success_count": 0,
+                "failed_count": 0,
+            },
+            "stop_event": stop_event,
+            "pause_event": pause_event,
+        }
+
+        with self._jobs_lock:
+            self.active_jobs[job_id] = job_info
+
+        self.log(f"🚀 [Job {job_id[:12]}] Khởi chạy tác vụ Cào Metadata bởi @{operator_name}: '{task_name}'...", level="info")
+        self.broadcast_jobs_state()
 
         def _crawl_worker():
             try:
@@ -151,18 +193,25 @@ class PipelineController:
                     with open(playlists_path, "r", encoding="utf-8") as f:
                         target_playlists = json.load(f).get("playlists", [])
 
-                    self.log(f"📋 Starting curated crawl across {len(target_playlists)} playlists (limit: {limit_per_playlist}/pl)...")
+                    self.log(f"📋 [Job {job_id[:12]}] Starting curated crawl across {len(target_playlists)} playlists...")
 
-                    for pl in target_playlists:
-                        if self.should_stop:
-                            self.log("Metadata crawl stopped by user.", level="warning")
+                    for idx, pl in enumerate(target_playlists):
+                        if stop_event.is_set():
+                            self.log(f"🛑 [Job {job_id[:12]}] Cào metadata đã bị dừng bởi người dùng.", level="warning")
                             break
+
+                        while pause_event.is_set() and not stop_event.is_set():
+                            time.sleep(0.5)
 
                         pl_name = pl.get("name")
                         pl_url = pl.get("url")
                         pl_genre = pl.get("genre", "pop")
-                        self.log(f"Crawling playlist: {pl_name}...")
-                        socketio.emit("task_status", {"task": f"Crawling: {pl_name}", "running": True})
+
+                        job_info["progress"]["current"] = idx + 1
+                        job_info["progress"]["total"] = len(target_playlists)
+                        job_info["progress"]["percent"] = int((idx + 1) / max(len(target_playlists), 1) * 100)
+                        job_info["progress"]["current_item"] = f"Playlist: {pl_name}"
+                        socketio.emit("job_progress", {"job_id": job_id, "progress": job_info["progress"]})
 
                         try:
                             tracks = collector.collect_playlist_tracks(pl_url, max_tracks=limit_per_playlist, default_genre=pl_genre)
@@ -176,25 +225,19 @@ class PipelineController:
 
                 else:
                     target_query = query.strip()
-                    self.log(f"🚀 Custom Crawl [{mode.upper()}]: '{target_query}' (Genre: {genre or 'auto'}, Limit: {limit_per_playlist})...")
-                    socketio.emit("task_status", {"task": f"Searching: {target_query}", "running": True})
+                    job_info["progress"]["current_item"] = f"Tìm kiếm: {target_query}"
+                    socketio.emit("job_progress", {"job_id": job_id, "progress": job_info["progress"]})
+
                     tracks = collector.collect_custom(mode=mode, query=target_query, max_tracks=limit_per_playlist, default_genre=genre)
                     all_raw_tracks.extend(tracks)
                     if genre:
                         self.db.upsert_genre(genre, genre.upper())
-
-                self.log(f"Collected {len(all_raw_tracks)} raw track items. Running Deduplication Engine...")
 
                 # Multi-Tier Deduplication against existing DB
                 existing_db_tracks = self.db.get_all_tracks()
                 unique_new, updated_existing, skipped_dups = Deduplicator.dedup_tracks(
                     tracks=all_raw_tracks,
                     existing_db_tracks=existing_db_tracks,
-                )
-
-                self.log(
-                    f"Deduplication Stats: {len(unique_new)} new tracks, "
-                    f"{len(updated_existing)} updated/merged, {len(skipped_dups)} duplicate tracks filtered out."
                 )
 
                 all_active_tracks = unique_new + updated_existing
@@ -226,15 +269,17 @@ class PipelineController:
                     username=operator_name,
                     action="CRAWL_METADATA",
                     status="SUCCESS",
-                    details=f"Cào metadata [{mode.upper()}]: +{len(unique_new)} bài mới, {len(updated_existing)} cập nhật ('{query or 'Curated'}')",
+                    details=f"Cào metadata [{mode.upper()}]: +{len(unique_new)} bài mới, {len(updated_existing)} cập nhật",
                     target=f"{len(all_active_tracks)} tracks",
                 )
 
-                self.log(
-                    f"✅ Metadata crawl completed! Added: +{len(unique_new)} tracks, Updated: {len(updated_existing)} tracks (by @{operator_name}).",
-                    level="success",
-                )
+                job_info["status"] = "completed"
+                job_info["progress"]["percent"] = 100
+                job_info["progress"]["current_item"] = f"Hoàn tất (+{len(unique_new)} mới, {len(updated_existing)} cập nhật)"
+                self.log(f"✅ [Job {job_id[:12]}] Metadata crawl completed! (+{len(unique_new)} bài mới by @{operator_name})", level="success")
             except Exception as ex:
+                job_info["status"] = "failed"
+                job_info["error"] = str(ex)
                 self.db.log_activity(
                     username=operator_name,
                     action="CRAWL_METADATA",
@@ -242,113 +287,114 @@ class PipelineController:
                     details=f"Cào metadata thất bại: {ex}",
                     target=mode,
                 )
-                self.log(f"Crawl failed: {ex}", level="error")
+                self.log(f"❌ [Job {job_id[:12]}] Crawl failed: {ex}", level="error")
             finally:
-                lock_manager.release_lock("pipeline_global_lock")
-                self.is_running = False
-                self.active_task_name = "Idle"
-                socketio.emit("task_status", {"task": "Idle", "running": False})
-                self.broadcast_stats()
+                time.sleep(2)
+                with self._jobs_lock:
+                    if job_id in self.active_jobs:
+                        del self.active_jobs[job_id]
+                self.broadcast_jobs_state()
 
-        self.worker_thread = threading.Thread(target=_crawl_worker, daemon=True)
-        self.worker_thread.start()
-        return True
+        worker_t = threading.Thread(target=_crawl_worker, daemon=True)
+        job_info["thread"] = worker_t
+        worker_t.start()
+        return {"success": True, "job_id": job_id, "task_name": task_name}
 
     def start_download_task(
         self,
         limit: int = 50,
-        delay: float = 5.0,
+        delay: float = 4.0,
         retry_failed: bool = False,
         operator_name: str = "admin",
         specific_ids: Optional[List[str]] = None,
-    ) -> bool:
-        """Run audio download in background thread with distributed pipeline lock."""
-        # 1. Acquire global pipeline execution lock
-        acquired, lock_info = lock_manager.acquire_lock(
-            lock_name="pipeline_global_lock",
-            owner=operator_name,
-            ttl_seconds=900,
-            metadata={"task": "Downloading Audio", "count": limit, "started_by": operator_name}
-        )
-        if not acquired:
-            holder = lock_info.get("owner", "user khác") if lock_info else "user khác"
-            time_left = lock_info.get("time_left_sec", 0) if lock_info else 0
-            cur_task = lock_info.get("metadata", {}).get("task", "Tác vụ khác") if lock_info else "Tác vụ khác"
-            msg = f"⚠️ XUNG ĐỘT TIẾN TRÌNH: Đang có tác vụ '{cur_task}' chạy bởi @{holder} (khóa còn hiệu lực {time_left}s). Vui lòng đợi!"
-            self.log(msg, level="warning")
-            socketio.emit("pipeline_lock_conflict", {
-                "message": msg,
-                "holder": holder,
-                "time_left_sec": time_left,
-                "task": cur_task,
-            })
-            return False
+    ) -> Dict[str, Any]:
+        """Run audio download in an isolated concurrent worker job with atomic work partitioning."""
+        job_id = f"job_dl_{operator_name}_{int(time.time()*1000)}"
 
-        self.is_running = True
-        self.should_stop = False
-        self.is_paused = False
-        self.active_task_name = "Downloading Audio"
+        # 1. Atomically claim unique batch of tracks exclusively for this job
+        claimed_tracks = self.db.claim_tracks_for_job(
+            job_id=job_id,
+            operator=operator_name,
+            limit=limit,
+            status="failed" if retry_failed else "pending",
+            specific_ids=specific_ids,
+        )
+
+        if not claimed_tracks:
+            msg = "Không có bài hát nào phù hợp trong hàng đợi hoặc tất cả bài đang được xử lý bởi các tiến trình khác."
+            self.log(msg, level="warning")
+            return {"success": False, "error": msg}
+
+        task_name = f"Batch Download ({len(claimed_tracks)} bài)"
+        stop_event = threading.Event()
+        pause_event = threading.Event()
+
+        job_info = {
+            "job_id": job_id,
+            "job_type": "download",
+            "task_name": task_name,
+            "operator": operator_name,
+            "status": "running",
+            "created_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.utcnow().isoformat(),
+            "progress": {
+                "current": 0,
+                "total": len(claimed_tracks),
+                "percent": 0,
+                "current_item": "Khởi tạo kết nối...",
+                "success_count": 0,
+                "failed_count": 0,
+            },
+            "stop_event": stop_event,
+            "pause_event": pause_event,
+        }
+
+        with self._jobs_lock:
+            self.active_jobs[job_id] = job_info
+
+        self.log(f"🎧 [Job {job_id[:12]}] Bắt đầu tải {len(claimed_tracks)} bài hát song song (Operator: @{operator_name})...", level="info")
+        self.broadcast_jobs_state()
 
         def _download_worker():
             try:
-                if specific_ids and len(specific_ids) > 0:
-                    tracks = []
-                    for sid in specific_ids:
-                        t = self.db.get_track(sid)
-                        if t:
-                            tracks.append(t)
-                else:
-                    target_status = "failed" if retry_failed else "pending"
-                    tracks = self.db.get_tracks_by_status(status=target_status, limit=limit)
-                    if not retry_failed:
-                        completed_ids = self.sm.get_completed_spotify_ids()
-                        tracks = [t for t in tracks if t.get("spotify_id") not in completed_ids]
-
-                if not tracks:
-                    self.log(f"Không có bài hát nào phù hợp để tải audio.", level="warning")
-                    return
-
-                self.log(f"🎧 Starting batch download for {len(tracks)} tracks (operator: @{operator_name})...")
-
                 def _progress_cb(info):
-                    self.current_track = info.get("track", {})
+                    t = info.get("track", {})
                     curr_idx = info.get("index") or info.get("current_index", 1)
-                    total = info.get("total", 1)
+                    total = info.get("total", len(claimed_tracks))
                     pct = int(curr_idx / max(total, 1) * 100)
-                    t_title = self.current_track.get("name", "Unknown")
-                    t_artist = self.current_track.get("artist_name", "Unknown")
+                    t_title = t.get("name", "Unknown")
+                    t_artist = t.get("artist_name", "Unknown")
                     stage = info.get("stage", "finished")
                     status = info.get("status", "in_progress")
 
-                    socketio.emit(
-                        "progress_update",
-                        {
-                            "current_index": curr_idx,
-                            "total": total,
-                            "percent": pct,
-                            "track_title": t_title,
-                            "artist_name": t_artist,
-                            "success_count": info.get("success_count", 0),
-                            "failed_count": info.get("failed_count", 0),
-                            "health": info.get("health", {}),
-                        },
-                    )
+                    job_info["progress"]["current"] = curr_idx
+                    job_info["progress"]["total"] = total
+                    job_info["progress"]["percent"] = pct
+                    job_info["progress"]["current_item"] = f"{t_artist} - {t_title}"
+                    job_info["progress"]["success_count"] = info.get("success_count", 0)
+                    job_info["progress"]["failed_count"] = info.get("failed_count", 0)
+
+                    socketio.emit("job_progress", {
+                        "job_id": job_id,
+                        "progress": job_info["progress"],
+                    })
 
                     if stage == "starting":
-                        self.log(f"🎵 [{curr_idx}/{total}] Downloading: {t_artist} - {t_title}...")
+                        self.log(f"🎵 [Job {job_id[:12]}] [{curr_idx}/{total}] Đang tải: {t_artist} - {t_title}...")
                     elif stage == "finished":
                         if status == "success":
-                            self.log(f"✅ [{curr_idx}/{total}] Finished: {t_artist} - {t_title} ({info.get('method', 'yt-dlp')})", level="success")
+                            self.log(f"✅ [Job {job_id[:12]}] [{curr_idx}/{total}] Tải xong: {t_artist} - {t_title}", level="success")
                         else:
-                            self.log(f"❌ [{curr_idx}/{total}] Failed: {t_artist} - {t_title}", level="error")
+                            self.log(f"❌ [Job {job_id[:12]}] [{curr_idx}/{total}] Lỗi tải: {t_artist} - {t_title}", level="error")
                         self.broadcast_stats()
 
                 res = self.dm.download_batch(
-                    tracks=tracks,
+                    tracks=claimed_tracks,
                     delay_seconds=delay,
                     progress_callback=_progress_cb,
-                    should_pause_check=lambda: self.is_paused,
-                    should_stop_check=lambda: self.should_stop,
+                    should_pause_check=lambda: pause_event.is_set(),
+                    should_stop_check=lambda: stop_event.is_set(),
+                    session_id=int(time.time()),
                 )
 
                 s_cnt = res.get("successful", res.get("success", 0))
@@ -358,51 +404,117 @@ class PipelineController:
                     username=operator_name,
                     action_type="download_audio",
                     count=s_cnt,
-                    details=f"Downloaded {s_cnt} MP3 tracks (320kbps)",
+                    details=f"Downloaded {s_cnt} MP3 tracks (Job {job_id[:8]})",
                 )
                 self.db.log_activity(
                     username=operator_name,
                     action="DOWNLOAD_AUDIO",
                     status="SUCCESS" if s_cnt > 0 else "WARNING",
-                    details=f"Tải batch audio: {s_cnt} bài thành công, {f_cnt} thất bại",
-                    target=f"{len(tracks)} tracks",
+                    details=f"Tải batch audio song song ({job_id[:8]}): {s_cnt} thành công, {f_cnt} thất bại",
+                    target=f"{len(claimed_tracks)} tracks",
                 )
 
-                self.log(f"🏁 Download batch finished: {s_cnt} success, {f_cnt} failed (by @{operator_name}).", level="success")
+                job_info["status"] = "completed"
+                job_info["progress"]["percent"] = 100
+                self.log(f"🏁 [Job {job_id[:12]}] Hoàn tất tải: {s_cnt} thành công, {f_cnt} thất bại (by @{operator_name}).", level="success")
             except Exception as ex:
+                job_info["status"] = "failed"
+                job_info["error"] = str(ex)
                 self.db.log_activity(
                     username=operator_name,
                     action="DOWNLOAD_AUDIO",
                     status="FAILED",
                     details=f"Tải batch audio lỗi: {ex}",
-                    target="batch_download",
+                    target=job_id,
                 )
-                self.log(f"Download worker error: {ex}", level="error")
+                self.log(f"❌ [Job {job_id[:12]}] Download worker error: {ex}", level="error")
             finally:
-                lock_manager.release_lock("pipeline_global_lock")
-                self.is_running = False
-                self.active_task_name = "Idle"
-                socketio.emit("task_status", {"task": "Idle", "running": False})
-                self.broadcast_stats()
+                # Release claims on any tracks not downloaded
+                self.db.release_job_claims(job_id)
+                time.sleep(2)
+                with self._jobs_lock:
+                    if job_id in self.active_jobs:
+                        del self.active_jobs[job_id]
+                self.broadcast_jobs_state()
 
-        self.worker_thread = threading.Thread(target=_download_worker, daemon=True)
-        self.worker_thread.start()
-        return True
+        worker_t = threading.Thread(target=_download_worker, daemon=True)
+        job_info["thread"] = worker_t
+        worker_t.start()
+        return {"success": True, "job_id": job_id, "task_name": task_name, "claimed_count": len(claimed_tracks)}
+
+    def pause_job(self, job_id: str, operator_name: str = "admin") -> bool:
+        """Pause a specific running job."""
+        with self._jobs_lock:
+            job = self.active_jobs.get(job_id)
+            if not job:
+                return False
+            pause_event = job.get("pause_event")
+            if pause_event:
+                pause_event.set()
+                job["status"] = "paused"
+                self.log(f"⏸️ [Job {job_id[:12]}] Tác vụ đã tạm dừng bởi @{operator_name}.", level="info")
+                self.broadcast_jobs_state()
+                return True
+            return False
+
+    def resume_job(self, job_id: str, operator_name: str = "admin") -> bool:
+        """Resume a paused job."""
+        with self._jobs_lock:
+            job = self.active_jobs.get(job_id)
+            if not job:
+                return False
+            pause_event = job.get("pause_event")
+            if pause_event:
+                pause_event.clear()
+                job["status"] = "running"
+                self.log(f"▶️ [Job {job_id[:12]}] Tác vụ được tiếp tục bởi @{operator_name}.", level="info")
+                self.broadcast_jobs_state()
+                return True
+            return False
+
+    def stop_job(self, job_id: str, operator_name: str = "admin") -> bool:
+        """Stop and terminate a specific job."""
+        with self._jobs_lock:
+            job = self.active_jobs.get(job_id)
+            if not job:
+                return False
+            stop_event = job.get("stop_event")
+            if stop_event:
+                stop_event.set()
+                job["status"] = "stopped"
+                self.db.release_job_claims(job_id)
+                self.log(f"⏹️ [Job {job_id[:12]}] Tác vụ đã bị hủy bởi @{operator_name}.", level="warning")
+                self.broadcast_jobs_state()
+                return True
+            return False
 
     def pause(self):
-        """Toggle pause state."""
+        """Toggle pause across all active jobs (Global switch)."""
         self.is_paused = not self.is_paused
-        status_label = "Paused" if self.is_paused else "Resumed"
-        self.log(f"Pipeline {status_label.lower()} by operator.")
-        socketio.emit("control_state", {"is_paused": self.is_paused, "is_running": self.is_running})
+        with self._jobs_lock:
+            for jid, job in self.active_jobs.items():
+                pe = job.get("pause_event")
+                if pe:
+                    if self.is_paused:
+                        pe.set()
+                        job["status"] = "paused"
+                    else:
+                        pe.clear()
+                        job["status"] = "running"
+        self.broadcast_jobs_state()
 
     def stop(self):
-        """Trigger stop signal and release global pipeline lock."""
+        """Stop all active jobs immediately."""
         self.should_stop = True
-        self.is_running = False
+        with self._jobs_lock:
+            for jid, job in self.active_jobs.items():
+                se = job.get("stop_event")
+                if se:
+                    se.set()
+                self.db.release_job_claims(jid)
+            self.active_jobs.clear()
         lock_manager.release_lock("pipeline_global_lock")
-        self.log("Pipeline stop signal emitted & global lock released.")
-        socketio.emit("control_state", {"is_paused": False, "is_running": False})
+        self.broadcast_jobs_state()
 
     def toggle_proxy(self, enable: bool):
         """Toggle proxy usage."""
@@ -1604,6 +1716,53 @@ def api_force_unlock():
     controller.broadcast_stats()
     controller.log(f"🔓 Quản trị viên @{user.get('username')} đã cưỡng bức giải phóng khóa '{lock_name}'.", level="warning")
     return jsonify({"success": True, "message": f"Đã giải phóng khóa '{lock_name}' thành công!"})
+
+
+# ─── Multi-Job Parallel Worker Queue REST Endpoints ──────────
+
+@app.route("/api/jobs/active", methods=["GET"])
+def api_get_active_jobs():
+    """Retrieve list of all active concurrent crawl and download jobs."""
+    jobs = controller.get_active_jobs_list()
+    return jsonify({
+        "success": True,
+        "jobs": jobs,
+        "total": len(jobs),
+        "is_running": controller.is_running,
+    })
+
+
+@app.route("/api/jobs/<job_id>/pause", methods=["POST"])
+def api_pause_job(job_id):
+    """Pause a specific running job."""
+    user = session.get("user", {})
+    operator = user.get("username", "admin")
+    ok = controller.pause_job(job_id, operator_name=operator)
+    if ok:
+        return jsonify({"success": True, "message": f"Đã tạm dừng tác vụ {job_id}"})
+    return jsonify({"success": False, "error": "Không tìm thấy tác vụ hoặc tác vụ đã kết thúc"}), 404
+
+
+@app.route("/api/jobs/<job_id>/resume", methods=["POST"])
+def api_resume_job(job_id):
+    """Resume a paused job."""
+    user = session.get("user", {})
+    operator = user.get("username", "admin")
+    ok = controller.resume_job(job_id, operator_name=operator)
+    if ok:
+        return jsonify({"success": True, "message": f"Đã tiếp tục tác vụ {job_id}"})
+    return jsonify({"success": False, "error": "Không tìm thấy tác vụ hoặc tác vụ đã kết thúc"}), 404
+
+
+@app.route("/api/jobs/<job_id>/stop", methods=["POST"])
+def api_stop_job(job_id):
+    """Stop/Cancel a specific job and release its claimed tracks."""
+    user = session.get("user", {})
+    operator = user.get("username", "admin")
+    ok = controller.stop_job(job_id, operator_name=operator)
+    if ok:
+        return jsonify({"success": True, "message": f"Đã dừng tác vụ {job_id} và giải phóng hàng đợi bài hát"})
+    return jsonify({"success": False, "error": "Không tìm thấy tác vụ hoặc tác vụ đã kết thúc"}), 404
 
 
 # ─── WebSocket Events ────────────────────────────────────────

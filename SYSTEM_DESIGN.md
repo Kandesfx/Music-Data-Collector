@@ -1409,8 +1409,25 @@ Khi triển khai hệ thống trên hạ tầng đám mây (Oracle Cloud Infrast
      - Endpoint `GET /api/system/locks` cho phép theo dõi thời gian thực các tác vụ đang chiếm giữ khóa.
      - Endpoint `POST /api/system/locks/force_unlock` hỗ trợ Quản trị viên can thiệp mở khóa cưỡng bức trong các tình huống khẩn cấp.
 
+#### J. Kiến Trúc Hàng Đợi Đa Tác Vụ Song Song & Phân Bổ Công Việc Thông Minh (Multi-Job Concurrent Worker Queue)
+- **Module:** [`src/storage/db_manager.py`](file:///d:/Hai/study/DATN/music-data-collector/src/storage/db_manager.py), [`dashboard/app.py`](file:///d:/Hai/study/DATN/music-data-collector/dashboard/app.py), [`dashboard/templates/index.html`](file:///d:/Hai/study/DATN/music-data-collector/dashboard/templates/index.html), [`dashboard/static/js/main.js`](file:///d:/Hai/study/DATN/music-data-collector/dashboard/static/js/main.js).
+- **Tính năng nổi bật:**
+  1. **Phân Bổ & Chiếm Dụng Bài Hát Độc Quyền Nguyên Tử (`claim_tracks_for_job`):**
+     - Khi nhiều thành viên trong nhóm cùng bấm tải hàng loạt (Batch Download) tại cùng một thời điểm, MongoDB tự động phân vùng và gán nhãn độc quyền `claimed_job_id` cho từng worker.
+     - Đảm bảo 2 user cùng tải 50 bài sẽ nhận được 2 tập dữ liệu hoàn toàn khác biệt, **100% không bị trùng lặp hoặc xung đột công việc**.
+  2. **Bộ Quản Lý Đa Luồng Độc Lập (`JobRegistry`):**
+     - Mỗi tác vụ khi tạo mới sẽ được cấp một `job_id`, `stop_event` và `pause_event` riêng biệt.
+     - Hỗ trợ chạy đồng thời nhiều tác vụ Cào (Crawl) và Tải (Download) từ nhiều người dùng khác nhau.
+  3. **Bảng Theo Dõi Đa Tác Vụ Thời Gian Thực (Active Team Jobs Panel):**
+     - Giao diện Dashboard hiển thị danh sách các tác vụ đang chạy song song của toàn đội ngũ (`#active-jobs-list`).
+     - Cung cấp nút điều khiển độc lập cho từng tiến trình: `⏸️ Tạm Dừng`, `▶️ Tiếp Tục`, `⏹️ Hủy Bỏ`.
+  4. **REST API Điều Khiển Đa Tác Vụ:**
+     - `GET /api/jobs/active`: Truy vấn danh sách các tác vụ đang chạy song song.
+     - `POST /api/jobs/<id>/pause`, `POST /api/jobs/<id>/resume`, `POST /api/jobs/<id>/stop`: Điều khiển từng tiến trình cụ thể.
+
 ---
 
 > **Ghi chú:** Tài liệu này đủ chi tiết để mỗi Task có thể được giao cho 1 agent độc lập triển khai. Mỗi agent chỉ cần đọc Task tương ứng + các Section reference để code mà không cần hỏi thêm.
+
 
 

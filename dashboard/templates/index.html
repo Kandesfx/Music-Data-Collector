@@ -437,10 +437,28 @@
           <!-- RIGHT COLUMN: Real-Time Execution Log & Progress -->
           <div class="flex-col">
             
-            <!-- Live Progress Bar Card -->
+            <!-- Live Multi-Job Parallel Tasks Card -->
+            <div class="card" id="card-active-jobs" style="border-color: rgba(59,130,246,0.3); background: linear-gradient(180deg, rgba(30,41,59,0.7) 0%, rgba(15,23,42,0.85) 100%);">
+              <div class="card-header" style="background: rgba(59,130,246,0.08);">
+                <div class="card-title" style="display: flex; align-items: center; gap: 8px;">
+                  <span>⚡ Tác Vụ Đa Luồng Song Song</span>
+                  <span class="badge badge-info font-mono" id="active-jobs-badge" style="font-size: 10px;">0 RUNNING</span>
+                </div>
+                <span class="text-dim font-mono" style="font-size: 10px;">Multi-Tenant Worker Queue</span>
+              </div>
+              <div class="card-body" style="padding: 12px;">
+                <div id="active-jobs-list" style="display: flex; flex-direction: column; gap: 8px;">
+                  <div class="text-dim" style="font-size: 11.5px; text-align: center; padding: 12px 0;">
+                    🟢 Không có tác vụ chạy ngầm. Hệ thống sẵn sàng tiếp nhận tiến trình cào &amp; tải song song từ nhiều người dùng.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Progress Bar Card (Active Primary Job) -->
             <div class="card">
               <div class="card-header">
-                <div class="card-title">📡 Tiến Độ Xử Lý Thời Gian Thực</div>
+                <div class="card-title">📡 Tiến Độ Xử Lý Trực Tuyến</div>
                 <span class="badge badge-success font-mono" id="engine-badge">320 kbps MP3</span>
               </div>
               <div class="card-body">
