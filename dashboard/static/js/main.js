@@ -73,10 +73,10 @@ socket.on("log_entry", (data) => {
 });
 
 socket.on("progress_update", (data) => {
-  progressFill.style.width = `${data.percent}%`;
-  progressText.textContent = `${data.percent}%`;
-  progressCount.textContent = `${data.current_index} / ${data.total} (Success: ${data.success_count} | Fail: ${data.failed_count})`;
-  currentTrackTitle.textContent = `🎵 Downloading: ${data.artist_name || ""} - ${data.track_title || ""}`;
+  if (progressFill) progressFill.style.width = `${data.percent}%`;
+  if (progressText) progressText.textContent = `${data.percent}%`;
+  if (progressCount) progressCount.textContent = `${data.current_index} / ${data.total} (Success: ${data.success_count} | Fail: ${data.failed_count})`;
+  if (currentTrackTitle) currentTrackTitle.textContent = `🎵 Downloading: ${data.artist_name || ""} - ${data.track_title || ""}`;
 
   if (data.health) {
     updateHealthBadge(data.health.health);
