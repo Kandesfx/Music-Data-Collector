@@ -638,14 +638,14 @@ class DownloadManager:
         # ─── BUILD STRICT PRIORITY ATTEMPTS ──────────────────────────
         attempt_configs = []
 
-        # TIER 1 (ƯU TIÊN SỐ 1): Tailscale & Proxies HOÀN TOÀN KHÔNG DÙNG COOKIE (Dùng IP dân cư sạch)
+        # TIER 1 (ƯU TIÊN SỐ 1): Tailscale & Proxies HOÀN TOÀN KHÔNG DÙNG COOKIE (Dùng Android Mobile Core)
         for p in proxy_candidates:
             if p:
                 attempt_configs.append({
                     "name": f"Tailscale/Residential Proxy No-Cookie ({p})",
                     "proxy": p,
                     "cookie": None,
-                    "clients": ["android", "ios", "tv", "web"]
+                    "clients": ["android_vr", "android", "ios", "mweb", "tv"]
                 })
 
         # TIER 2 (DỰ PHÒNG SỐ 2): Nếu gặp bài hát bị khóa/yêu cầu đăng nhập, mới kích hoạt Cookie
@@ -656,7 +656,7 @@ class DownloadManager:
                         "name": f"Proxy with Cookie Authentication ({p})",
                         "proxy": p,
                         "cookie": active_cookie,
-                        "clients": ["web", "mweb", "android"]
+                        "clients": ["android_vr", "android", "web", "mweb"]
                     })
 
         # TIER 3 (DỰ PHÒNG CUỐI CÙNG): Kết nối Direct
@@ -664,14 +664,14 @@ class DownloadManager:
             "name": "Direct Connection without Cookie",
             "proxy": None,
             "cookie": None,
-            "clients": ["android", "ios", "tv", "web"]
+            "clients": ["android_vr", "android", "ios", "mweb", "tv"]
         })
         if active_cookie:
             attempt_configs.append({
                 "name": "Direct Connection with Cookie Auth",
                 "proxy": None,
                 "cookie": active_cookie,
-                "clients": ["web", "mweb", "android"]
+                "clients": ["android_vr", "android", "web", "mweb"]
             })
 
         last_error = None
