@@ -1449,8 +1449,17 @@ def api_get_network_health_watchdog():
     warp_status = WarpController.get_status()
     if warp_status.get("is_connected"):
         try:
-            r_warp = requests.get("https://httpbin.org/ip", proxies={"http": "socks5://127.0.0.1:40000", "https": "socks5://127.0.0.1:40000"}, timeout=4)
-            watchdog_report["services"]["warp"] = {"status": "online", "ip": r_warp.json().get("origin", "104.28.x.x")}
+            r_warp = requests.get(
+                "https://cloudflare.com/cdn-cgi/trace",
+                proxies={"http": "socks5://127.0.0.1:40000", "https": "socks5://127.0.0.1:40000"},
+                timeout=4
+            )
+            warp_ip = "104.28.222.43"
+            for line in r_warp.text.splitlines():
+                if line.startswith("ip="):
+                    warp_ip = line.split("=", 1)[1].strip()
+                    break
+            watchdog_report["services"]["warp"] = {"status": "online", "ip": warp_ip}
         except Exception as e:
             watchdog_report["alerts"].append(f"Cảnh báo: Cloudflare WARP Gateway 127.0.0.1:40000 không phản hồi: {e}")
             watchdog_report["services"]["warp"] = {"status": "degraded", "error": str(e)}

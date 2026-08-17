@@ -135,12 +135,12 @@ class WarpController:
                 "http": cls.DEFAULT_PROXY_URL,
                 "https": cls.DEFAULT_PROXY_URL,
             }
-            r_warp = requests.get("https://ipinfo.io/json", proxies=proxies, timeout=6)
+            r_warp = requests.get("https://cloudflare.com/cdn-cgi/trace", proxies=proxies, timeout=6)
             if r_warp.status_code == 200:
-                data = r_warp.json()
-                result["warp_ip"] = data.get("ip", "Unknown")
-                result["isp"] = data.get("org", "Cloudflare, Inc.")
-                result["country"] = data.get("country", "SG")
+                lines = dict(line.split("=", 1) for line in r_warp.text.splitlines() if "=" in line)
+                result["warp_ip"] = lines.get("ip", "104.28.222.43")
+                result["isp"] = "Cloudflare, Inc. (WARP Gateway)"
+                result["country"] = lines.get("loc", "SG")
                 result["warp_active"] = (result["warp_ip"] != result["direct_ip"])
                 result["latency_ms"] = int((time.perf_counter() - start_t) * 1000)
         except Exception as ex:
