@@ -2391,7 +2391,164 @@ if (btnSaveInspectorEdit) {
   });
 }
 
-// ─── In-App Audio Player Controller ──────────────────────────
+// ─── In-App Audio Player Controller & Playlist Queue ─────────
+let playerShuffleMode = false;       // false: Sequential, true: Shuffle
+let playerRepeatMode = "off";        // "off", "all", "one"
+
+const playerBtnShuffle = document.getElementById("player-btn-shuffle");
+const playerBtnPrev = document.getElementById("player-btn-prev");
+const playerBtnNext = document.getElementById("player-btn-next");
+const playerBtnRepeat = document.getElementById("player-btn-repeat");
+
+function getPlayableTrackList() {
+  if (Array.isArray(currentCatalogTracks) && currentCatalogTracks.length > 0) {
+    const downloaded = currentCatalogTracks.filter((t) => t.download_status === "completed" || t.local_path);
+    return downloaded.length > 0 ? downloaded : currentCatalogTracks;
+  }
+  return [];
+}
+
+function updatePlayerControlsUI() {
+  if (playerBtnShuffle) {
+    if (playerShuffleMode) {
+      playerBtnShuffle.style.color = "var(--accent-purple)";
+      playerBtnShuffle.style.filter = "drop-shadow(0 0 6px rgba(168, 85, 247, 0.6))";
+      playerBtnShuffle.title = "Phát ngẫu nhiên: BẬT (Shuffle: ON)";
+    } else {
+      playerBtnShuffle.style.color = "var(--text-dim)";
+      playerBtnShuffle.style.filter = "none";
+      playerBtnShuffle.title = "Phát ngẫu nhiên: TẮT (Shuffle: OFF)";
+    }
+  }
+
+  if (playerBtnRepeat) {
+    if (playerRepeatMode === "all") {
+      playerBtnRepeat.textContent = "🔁";
+      playerBtnRepeat.style.color = "var(--accent-cyan)";
+      playerBtnRepeat.style.filter = "drop-shadow(0 0 6px rgba(6, 182, 212, 0.6))";
+      playerBtnRepeat.title = "Chế độ: LẶP LẠI TOÀN BỘ DANH SÁCH (Repeat: ALL)";
+    } else if (playerRepeatMode === "one") {
+      playerBtnRepeat.textContent = "🔂";
+      playerBtnRepeat.style.color = "var(--accent-green)";
+      playerBtnRepeat.style.filter = "drop-shadow(0 0 6px rgba(16, 185, 129, 0.6))";
+      playerBtnRepeat.title = "Chế độ: LẶP LẠI 1 BÀI HIỆN TẠI (Repeat: ONE)";
+    } else {
+      playerBtnRepeat.textContent = "🔁";
+      playerBtnRepeat.style.color = "var(--text-dim)";
+      playerBtnRepeat.style.filter = "none";
+      playerBtnRepeat.title = "Chế độ: TẮT LẶP LẠI (Repeat: OFF)";
+    }
+  }
+}
+
+function toggleShuffleMode() {
+  playerShuffleMode = !playerShuffleMode;
+  updatePlayerControlsUI();
+  if (typeof appendLog === "function") {
+    appendLog(`🔀 Chế độ phát ngẫu nhiên: ${playerShuffleMode ? 'BẬT (ON)' : 'TẮT (OFF)'}`, "info");
+  }
+}
+
+function cycleRepeatMode() {
+  if (playerRepeatMode === "off") {
+    playerRepeatMode = "all";
+  } else if (playerRepeatMode === "all") {
+    playerRepeatMode = "one";
+  } else {
+    playerRepeatMode = "off";
+  }
+  updatePlayerControlsUI();
+  const label = playerRepeatMode === "all" ? "LẶP LẠI TOÀN BỘ DANH SÁCH (ALL)" : (playerRepeatMode === "one" ? "LẶP LẠI 1 BÀI (ONE)" : "TẮT LẶP LẠI (OFF)");
+  if (typeof appendLog === "function") {
+    appendLog(`🔁 Chế độ lặp lại: ${label}`, "info");
+  }
+}
+
+function playNextTrack(isAutoEnded = false) {
+  if (isAutoEnded && playerRepeatMode === "one") {
+    if (inAppAudio) {
+      inAppAudio.currentTime = 0;
+      inAppAudio.play().catch((e) => console.warn(e));
+      return;
+    }
+  }
+
+  const playlist = getPlayableTrackList();
+  if (!playlist || playlist.length === 0) return;
+
+  const curIdx = playlist.findIndex((t) => currentPlayingTrack && t.spotify_id === currentPlayingTrack.spotify_id);
+
+  let nextIdx = 0;
+  if (playerShuffleMode) {
+    if (playlist.length > 1) {
+      do {
+        nextIdx = Math.floor(Math.random() * playlist.length);
+      } while (nextIdx === curIdx);
+    } else {
+      nextIdx = 0;
+    }
+  } else {
+    if (curIdx >= 0 && curIdx < playlist.length - 1) {
+      nextIdx = curIdx + 1;
+    } else if (playerRepeatMode === "all") {
+      nextIdx = 0;
+    } else {
+      if (isAutoEnded) {
+        if (playerBtnPlay) playerBtnPlay.textContent = "▶";
+        updateRowPlayButtons();
+        return;
+      }
+      nextIdx = 0;
+    }
+  }
+
+  const nextTrack = playlist[nextIdx];
+  if (nextTrack) {
+    playInAppTrack(nextTrack);
+  }
+}
+
+function playPrevTrack() {
+  if (inAppAudio && inAppAudio.currentTime > 3.0) {
+    inAppAudio.currentTime = 0;
+    return;
+  }
+
+  const playlist = getPlayableTrackList();
+  if (!playlist || playlist.length === 0) return;
+
+  const curIdx = playlist.findIndex((t) => currentPlayingTrack && t.spotify_id === currentPlayingTrack.spotify_id);
+
+  let prevIdx = 0;
+  if (playerShuffleMode) {
+    if (playlist.length > 1) {
+      do {
+        prevIdx = Math.floor(Math.random() * playlist.length);
+      } while (prevIdx === curIdx);
+    } else {
+      prevIdx = 0;
+    }
+  } else {
+    if (curIdx > 0) {
+      prevIdx = curIdx - 1;
+    } else if (playerRepeatMode === "all") {
+      prevIdx = playlist.length - 1;
+    } else {
+      prevIdx = 0;
+    }
+  }
+
+  const prevTrack = playlist[prevIdx];
+  if (prevTrack) {
+    playInAppTrack(prevTrack);
+  }
+}
+
+window.toggleShuffleMode = toggleShuffleMode;
+window.cycleRepeatMode = cycleRepeatMode;
+window.playNextTrack = playNextTrack;
+window.playPrevTrack = playPrevTrack;
+
 function updateRowPlayButtons() {
   document.querySelectorAll(".btn-play-track").forEach((btn) => {
     const sid = btn.getAttribute("data-id");
@@ -2433,6 +2590,7 @@ function playInAppTrack(track) {
   if (playerBtnPlay) playerBtnPlay.textContent = "⏸";
   if (inAppPlayerBar) inAppPlayerBar.style.display = "flex";
 
+  updatePlayerControlsUI();
   updateRowPlayButtons();
 }
 
@@ -2456,8 +2614,7 @@ if (inAppAudio) {
   });
 
   inAppAudio.addEventListener("ended", () => {
-    if (playerBtnPlay) playerBtnPlay.textContent = "▶";
-    updateRowPlayButtons();
+    playNextTrack(true);
   });
 }
 
@@ -2479,6 +2636,22 @@ if (playerBtnPlay) {
     }
     updateRowPlayButtons();
   });
+}
+
+if (playerBtnShuffle) {
+  playerBtnShuffle.addEventListener("click", toggleShuffleMode);
+}
+
+if (playerBtnRepeat) {
+  playerBtnRepeat.addEventListener("click", cycleRepeatMode);
+}
+
+if (playerBtnNext) {
+  playerBtnNext.addEventListener("click", () => playNextTrack(false));
+}
+
+if (playerBtnPrev) {
+  playerBtnPrev.addEventListener("click", playPrevTrack);
 }
 
 if (playerBtnBackward) {

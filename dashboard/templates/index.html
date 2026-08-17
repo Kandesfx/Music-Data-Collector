@@ -824,10 +824,14 @@
     </div>
 
     <div class="player-controls">
-      <div class="player-buttons">
-        <button id="player-btn-backward" class="player-ctrl-btn" title="Lùi 10 giây">⏮ -10s</button>
-        <button id="player-btn-play" class="btn-play" title="Phát / Dừng">▶</button>
-        <button id="player-btn-forward" class="player-ctrl-btn" title="Tua 10 giây">+10s ⏭</button>
+      <div class="player-buttons" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <button id="player-btn-shuffle" class="player-ctrl-btn" title="Phát ngẫu nhiên: TẮT" style="font-size: 13px; color: var(--text-dim); transition: all 0.2s; padding: 4px 6px;">🔀</button>
+        <button id="player-btn-prev" class="player-ctrl-btn" title="Bài trước đó" style="font-size: 12px; padding: 4px 6px;">⏮</button>
+        <button id="player-btn-backward" class="player-ctrl-btn" title="Lùi 10 giây" style="font-size: 11px; padding: 4px 6px;">-10s</button>
+        <button id="player-btn-play" class="btn-play" title="Phát / Dừng" style="font-size: 14px; width: 34px; height: 34px;">▶</button>
+        <button id="player-btn-forward" class="player-ctrl-btn" title="Tua 10 giây" style="font-size: 11px; padding: 4px 6px;">+10s</button>
+        <button id="player-btn-next" class="player-ctrl-btn" title="Bài kế tiếp" style="font-size: 12px; padding: 4px 6px;">⏭</button>
+        <button id="player-btn-repeat" class="player-ctrl-btn" title="Chế độ lặp lại: TẮT" style="font-size: 13px; color: var(--text-dim); transition: all 0.2s; padding: 4px 6px;">🔁</button>
       </div>
       <div class="player-scrubber" style="position: relative;">
         <span id="player-current-time" class="player-time" style="text-align: right;">0:00</span>
