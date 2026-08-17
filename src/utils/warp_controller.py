@@ -45,9 +45,16 @@ class WarpController:
             output = (res.stdout + res.stderr).strip()
             is_connected = "Connected" in output or "Status update: Connected" in output
             
-            # Check mode & settings
-            mode_res = subprocess.run(["warp-cli", "--accept-tos", "mode"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
-            mode_str = (mode_res.stdout + mode_res.stderr).strip()
+            # Check mode from settings list
+            mode_str = "WarpProxy on port 40000"
+            try:
+                settings_res = subprocess.run(["warp-cli", "--accept-tos", "settings", "list"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
+                for line in settings_res.stdout.splitlines():
+                    if "Mode:" in line:
+                        mode_str = line.split("Mode:", 1)[1].strip()
+                        break
+            except Exception:
+                pass
 
             return {
                 "installed": True,
