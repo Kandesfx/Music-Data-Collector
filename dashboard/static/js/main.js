@@ -4849,7 +4849,7 @@ socket.on("pipeline_lock_conflict", (data) => {
       const data = await res.json();
       if (!data.success) return;
 
-      const ts = data.tailscale || {};
+      const ts = data.tailscale || data || {};
       if (tailscaleStatusBadge) {
         if (ts.is_connected) {
           tailscaleStatusBadge.className = "badge badge-success";

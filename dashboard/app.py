@@ -1400,7 +1400,8 @@ def api_toggle_warp():
 @app.route("/api/network/tailscale/status", methods=["GET"])
 def api_get_tailscale_status():
     """Get Tailscale connection and exit nodes status."""
-    return jsonify({"success": True, **TailscaleController.get_status()})
+    st = TailscaleController.get_status()
+    return jsonify({"success": True, "tailscale": st, **st})
 
 
 @app.route("/api/network/tailscale/connect", methods=["POST"])
