@@ -15,7 +15,8 @@ logger = get_logger(__name__)
 class YTMusicMatcher:
     """
     Precision Matcher for finding the best official studio audio track on YouTube Music.
-    Scores candidates based on duration match, artist similarity, and clean audio metadata.
+    Scores candidates based on duration match, artist similarity, and clean audio metadata
+    with strict title matching gates to eliminate cross-song collisions.
     """
 
     def __init__(self):
@@ -64,6 +65,7 @@ class YTMusicMatcher:
     ) -> float:
         """
         Calculate a similarity and quality score (0 - 100) for a candidate track.
+        Enforces strict title matching gates to prevent downloading a different song by the same artist.
         """
         cand_title = candidate.get("title", "")
         cand_artists = [a.get("name", "") for a in candidate.get("artists", [])]
@@ -76,40 +78,51 @@ class YTMusicMatcher:
         norm_cand_title = self._normalize_string(cand_title)
         norm_cand_artist = self._normalize_string(cand_artist_str)
 
-        score = 0.0
-
         # 1. Title Matching (0 - 40 points)
+        title_score = 0.0
         if norm_target_title == norm_cand_title:
-            score += 40.0
+            title_score = 40.0
         elif norm_target_title in norm_cand_title or norm_cand_title in norm_target_title:
-            score += 30.0
+            title_score = 35.0
         else:
             target_words = set(norm_target_title.split())
             cand_words = set(norm_cand_title.split())
             if target_words:
                 overlap = len(target_words.intersection(cand_words)) / len(target_words)
-                score += overlap * 25.0
+                if overlap >= 0.4:
+                    title_score = overlap * 30.0
+
+        # MANDATORY HARD GATE: If title does not match, reject immediately!
+        # This completely prevents picking another song from the same artist/album.
+        if title_score <= 0.0:
+            return 0.0
+
+        score = title_score
 
         # 2. Artist Matching (0 - 30 points)
+        artist_score = 0.0
         if norm_target_artist in norm_cand_artist or norm_cand_artist in norm_target_artist:
-            score += 30.0
+            artist_score = 30.0
         else:
             target_art_words = set(norm_target_artist.split())
             cand_art_words = set(norm_cand_artist.split())
             if target_art_words:
                 overlap = len(target_art_words.intersection(cand_art_words)) / len(target_art_words)
-                score += overlap * 20.0
+                if overlap >= 0.2:
+                    artist_score = overlap * 25.0
+
+        score += artist_score
 
         # 3. Duration Matching (0 - 30 points) - Critical for avoiding MV intros/outros
         if target_duration_sec and cand_duration_sec:
             delta = abs(target_duration_sec - cand_duration_sec)
-            if delta <= 2:
+            if delta <= 3:
                 score += 30.0
-            elif delta <= 5:
+            elif delta <= 8:
                 score += 20.0
-            elif delta <= 10:
+            elif delta <= 20:
                 score += 10.0
-            elif delta > 30:
+            elif delta > 45:
                 score -= 30.0
 
         # 4. Result Type Bonus
@@ -119,7 +132,7 @@ class YTMusicMatcher:
         # 5. Negative keyword penalty
         for neg in self.negative_keywords:
             if neg in cand_title.lower() and neg not in target_title.lower():
-                score -= 25.0
+                score -= 30.0
 
         return max(0.0, score)
 
@@ -131,32 +144,41 @@ class YTMusicMatcher:
     ) -> Optional[Dict[str, Any]]:
         """
         Search YTMusic and return the best candidate video_id and metadata.
+        Uses multi-stage progressive search to find official releases across all catalogues.
         """
         if not self.ytmusic:
             return None
 
         target_duration_sec = int(duration_ms / 1000) if duration_ms else None
-        query = f"{artist} - {title}"
+        main_artist = artist.split(",")[0].split("&")[0].strip()
 
-        try:
-            # 1. Search 'songs' filter first (Official Album Audio)
-            results = self.ytmusic.search(query, filter="songs", limit=5)
-            
-            # If no results, try general search
-            if not results:
-                results = self.ytmusic.search(query, limit=5)
+        search_plans = [
+            (f"{artist} - {title}", "songs"),
+            (f"{main_artist} - {title}", "songs"),
+            (f"{title} {artist}", None),
+            (f"{title} {main_artist}", None),
+            (f"{title} Official Audio", None),
+        ]
 
-            if not results:
-                logger.debug(f"YTMusic: No candidates found for '{query}'")
-                return None
+        seen_videos = set()
+        best_candidate = None
+        best_score = -1.0
 
-            best_candidate = None
-            best_score = -1.0
+        for query_str, filter_type in search_plans:
+            try:
+                if filter_type:
+                    results = self.ytmusic.search(query_str, filter=filter_type, limit=5)
+                else:
+                    results = self.ytmusic.search(query_str, limit=6)
+            except Exception as e:
+                logger.debug(f"Search failed for '{query_str}': {e}")
+                continue
 
-            for candidate in results:
-                video_id = candidate.get("videoId")
-                if not video_id:
+            for candidate in (results or []):
+                vid = candidate.get("videoId")
+                if not vid or vid in seen_videos:
                     continue
+                seen_videos.add(vid)
 
                 score = self._calculate_match_score(
                     candidate=candidate,
@@ -169,22 +191,22 @@ class YTMusicMatcher:
                     best_score = score
                     best_candidate = candidate
 
-            # Minimum acceptable score threshold
-            if best_candidate and best_score >= 35.0:
-                video_id = best_candidate.get("videoId")
-                return {
-                    "video_id": video_id,
-                    "youtube_url": f"https://www.youtube.com/watch?v={video_id}",
-                    "title": best_candidate.get("title"),
-                    "artist": " & ".join([a.get("name", "") for a in best_candidate.get("artists", [])]),
-                    "album": (best_candidate.get("album") or {}).get("name"),
-                    "duration": best_candidate.get("duration"),
-                    "score": best_score,
-                }
-            else:
-                logger.debug(f"YTMusic: Best candidate for '{query}' scored too low ({best_score:.1f})")
-                return None
+            # If high confidence studio match found, stop early
+            if best_score >= 65.0:
+                break
 
-        except Exception as e:
-            logger.warning(f"Error during YTMusic precision match for '{query}': {e}")
+        # Minimum acceptable score threshold
+        if best_candidate and best_score >= 35.0:
+            video_id = best_candidate.get("videoId")
+            return {
+                "video_id": video_id,
+                "youtube_url": f"https://www.youtube.com/watch?v={video_id}",
+                "title": best_candidate.get("title"),
+                "artist": " & ".join([a.get("name", "") for a in best_candidate.get("artists", [])]),
+                "album": (best_candidate.get("album") or {}).get("name"),
+                "duration": best_candidate.get("duration"),
+                "score": best_score,
+            }
+        else:
+            logger.debug(f"YTMusic: Best candidate for '{artist} - {title}' scored too low ({best_score:.1f})")
             return None
