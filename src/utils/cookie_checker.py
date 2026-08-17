@@ -158,7 +158,7 @@ class CookieHealthChecker:
 
         # Check critical YouTube session keys
         found_critical = [k for k in cls.CRITICAL_YT_COOKIES if k in cookies_dict]
-        has_login = "LOGIN_INFO" in cookies_dict or "SID" in cookies_dict or "__Secure-1PSID" in cookies_dict
+        has_login = bool(any(k in cookies_dict for k in ["LOGIN_INFO", "SID", "SSID", "HSID", "__Secure-1PSID", "__Secure-3PSID", "SAPISID", "APISID", "__Secure-1PAPISID", "__Secure-3PAPISID"]))
 
         expiry_str = "Vĩnh viễn / Không thời hạn"
         if earliest_expiry:
@@ -212,7 +212,7 @@ class CookieHealthChecker:
 
         return {
             "exists": True,
-            "valid": (has_login and probe_success),
+            "valid": (len(cookies_list) > 3 and probe_success),
             "status": status_label,
             "message": probe_msg,
             "cookie_count": len(cookies_list),

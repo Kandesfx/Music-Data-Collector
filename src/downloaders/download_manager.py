@@ -616,15 +616,28 @@ class DownloadManager:
             if alt_proxy and alt_proxy not in proxy_candidates:
                 proxy_candidates.append(alt_proxy)
             # Add WARP fallback if not already primary
-            warp_proxy = "socks5://127.0.0.1:40000"
-            if warp_proxy not in proxy_candidates:
-                proxy_candidates.append(warp_proxy)
-        # Direct attempt as last resort
-        if None not in proxy_candidates:
-            proxy_candidates.append(None)
+        # Build multi-strategy attempt configurations:
+        # 1. Try with active cookie (if exists) + proxies
+        # 2. If cookie is invalid/expired, automatically drop cookie and retry via Tailscale / WARP
+        # 3. Mobile clients (android, ios, tv) without cookies
+        attempt_configs = []
+        if active_cookie:
+            for p in proxy_candidates[:2]:
+                attempt_configs.append({"proxy": p, "cookie": active_cookie, "clients": ["web", "mweb", "android"]})
+
+        # No-cookie attempts (works seamlessly with Tailscale residential IP and WARP)
+        for p in proxy_candidates[:2]:
+            attempt_configs.append({"proxy": p, "cookie": None, "clients": ["android", "ios", "tv", "mweb"]})
+
+        # Direct connection attempt as fallback
+        attempt_configs.append({"proxy": None, "cookie": None, "clients": ["android", "ios", "tv", "web"]})
 
         last_error = None
-        for attempt_idx, current_proxy in enumerate(proxy_candidates[:3]):
+        for attempt_idx, config in enumerate(attempt_configs):
+            current_proxy = config["proxy"]
+            current_cookie = config["cookie"]
+            client_list = config.get("clients", ["android", "ios", "web"])
+
             ydl_opts = {
                 "format": "bestaudio/best",
                 "outtmpl": out_template,
@@ -635,7 +648,11 @@ class DownloadManager:
                         "preferredquality": "320",
                     }
                 ],
-                "extractor_args": FingerprintGenerator.get_ytdlp_extractor_args(),
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": client_list,
+                    }
+                },
                 "http_headers": FingerprintGenerator.get_ytdlp_http_headers(),
                 "quiet": True,
                 "no_warnings": True,
@@ -646,8 +663,8 @@ class DownloadManager:
             if not target_url_or_query.startswith("http://") and not target_url_or_query.startswith("https://"):
                 ydl_opts["default_search"] = "ytsearch1"
 
-            if active_cookie:
-                ydl_opts["cookiefile"] = active_cookie
+            if current_cookie:
+                ydl_opts["cookiefile"] = current_cookie
 
             if current_proxy:
                 ydl_opts["proxy"] = current_proxy
@@ -678,7 +695,7 @@ class DownloadManager:
                 if "sign in to confirm" in err_str.lower() or "bot" in err_str.lower():
                     FingerprintGenerator.set_active_profile("random")
 
-                time.sleep(1)
+                time.sleep(0.5)
 
         return False, None, last_error or "yt-dlp failed on all fallback attempts."
 
