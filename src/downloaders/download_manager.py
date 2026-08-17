@@ -545,7 +545,7 @@ class DownloadManager:
         except Exception as e:
             return False, None, str(e)
 
-    def _download_via_ytdlp(
+    def _download_ytdlp(
         self,
         target_url_or_query: str,
         output_dir: Path,
@@ -635,6 +635,10 @@ class DownloadManager:
                 shutil.rmtree(str(temp_dir))
         except Exception:
             pass
+
+    # Aliases for compatibility
+    _download_via_ytdlp = _download_ytdlp
+    _download_via_spotdl = _download_spotdl
 
     def download_batch(
         self,
