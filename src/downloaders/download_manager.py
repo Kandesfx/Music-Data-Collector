@@ -22,6 +22,7 @@ from src.storage.db_manager import DBManager
 from src.processors.post_processor import PostProcessor
 from src.downloaders.ytmusic_matcher import YTMusicMatcher
 from src.collectors.lyrics_collector import LyricsCollector
+from src.utils.cookie_checker import CookieHealthChecker
 from src.utils.health_checker import HealthChecker
 from src.utils.session_manager import SessionManager
 from src.utils.proxy_manager import ProxyManager
@@ -260,12 +261,20 @@ class DownloadManager:
                 "Sign in to confirm your age",
             ]
             if any(ci in error_message for ci in cookie_indicators):
-                logger.warning(f"⚠️ Detected Cookie Invalidation / Bot Check during download: {error_message[:80]}")
-                if hasattr(self, "on_cookie_expired") and self.on_cookie_expired:
-                    try:
-                        self.on_cookie_expired("youtube", error_message)
-                    except Exception as ex:
-                        logger.error(f"Error in on_cookie_expired callback: {ex}")
+                # Verify whether the cookie is ACTUALLY expired or if it was just an isolated video-level / IP restriction
+                try:
+                    cookie_health = CookieHealthChecker.check_health(probe_network=True)
+                    if not cookie_health.get("valid", False):
+                        logger.error(f"🚨 Xác nhận Cookie đã hết hạn thật sự: {cookie_health.get('message')}")
+                        if hasattr(self, "on_cookie_expired") and self.on_cookie_expired:
+                            self.on_cookie_expired("youtube", error_message)
+                    else:
+                        logger.info(
+                            f"🟢 Kiểm tra nhanh: Cookie YouTube vẫn sống ({cookie_health.get('latency_ms')}ms, {cookie_health.get('cookie_count')} keys). "
+                            f"Lỗi vừa rồi chỉ là giới hạn tần suất/bản quyền riêng của video này. Tiếp tục tải các bài tiếp theo."
+                        )
+                except Exception as ex:
+                    logger.debug(f"Cookie health verification note: {ex}")
 
         self.db.update_track_download_status(
             spotify_id=spotify_id,
@@ -522,12 +531,17 @@ class DownloadManager:
             ],
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "ios", "mweb", "web"]
+                    "player_client": ["web", "mweb", "tv", "android", "ios"]
                 }
+            },
+            "http_headers": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
             },
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
+            "socket_timeout": 30,
         }
 
         # If it's not a direct URL, search YouTube
