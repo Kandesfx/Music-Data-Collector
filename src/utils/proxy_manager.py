@@ -246,6 +246,9 @@ class ProxyManager:
             "latency_ms": 30,
         }
 
+    # Backward compatibility alias
+    inspect_egress_ip = inspect_proxy_egress
+
     @staticmethod
     def test_proxy_connection(proxy_url: str, timeout: int = 5) -> Dict[str, Any]:
         """
