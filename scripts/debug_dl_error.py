@@ -3,6 +3,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
+from config import settings
 from src.downloaders.download_manager import DownloadManager
 
 dm = DownloadManager()
@@ -22,6 +23,7 @@ for c in candidates:
 if candidates:
     url = candidates[0].get("youtube_url")
     print(f"\n2. Testing yt-dlp download for: {url}...")
-    temp_dir = dm.fm.create_temp_dir()
+    temp_dir = settings.DATA_DIR / "temp" / "test_debug"
+    temp_dir.mkdir(parents=True, exist_ok=True)
     ok, path, err = dm._download_ytdlp(url, temp_dir)
     print("Download OK:", ok, "Path:", path, "\nError:", err)
