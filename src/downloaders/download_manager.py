@@ -645,6 +645,7 @@ class DownloadManager:
         progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
         should_pause_check: Optional[Callable[[], bool]] = None,
         should_stop_check: Optional[Callable[[], bool]] = None,
+        session_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Download multiple tracks with session checkpointing, auto-cool-off, and real-time callbacks.
@@ -653,7 +654,8 @@ class DownloadManager:
         pending_tracks = [t for t in tracks if t.get("spotify_id") not in completed_ids]
 
         total_pending = len(pending_tracks)
-        session_id = self.session_manager.start_session(total_pending)
+        if session_id is None:
+            session_id = self.session_manager.start_session(total_pending)
 
         logger.info(
             f"Starting batch session #{session_id} for {total_pending} tracks "
