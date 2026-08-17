@@ -636,10 +636,26 @@ function updateDownloadSelectionCount() {
   }
 }
 
-async function loadDownloadQueue(page = 1) {
+async function loadDownloadQueue(page = 1, forceSyncWithInputLimit = false) {
   if (!downloadPreviewSection || !downloadQueueTableBody) return;
   queueCurrentPage = page;
   downloadPreviewSection.style.display = "block";
+
+  const dlLimitInput = document.getElementById("download-limit");
+  const desiredLimit = dlLimitInput ? (parseInt(dlLimitInput.value) || 20) : 20;
+
+  // Auto-sync page size dropdown with user's desired limit if requested or on initial open
+  if (forceSyncWithInputLimit && queueLimitSelect) {
+    if (desiredLimit >= 100) {
+      queueLimitSelect.value = "100";
+    } else if (desiredLimit >= 50) {
+      queueLimitSelect.value = "50";
+    } else if (desiredLimit >= 20) {
+      queueLimitSelect.value = "20";
+    } else {
+      queueLimitSelect.value = "10";
+    }
+  }
 
   const search = queueSearchInput ? queueSearchInput.value.trim() : "";
   const status = queueFilterStatus ? queueFilterStatus.value : "pending";
@@ -650,6 +666,28 @@ async function loadDownloadQueue(page = 1) {
   downloadQueueTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-dim" style="padding: 24px;">⏳ Đang tải hàng đợi bài hát (Trang ${page})...</td></tr>`;
 
   try {
+    // If we need to sync selection with input limit, query all matching IDs first
+    if (forceSyncWithInputLimit || (queueSelectedIds.size === 0 && page === 1)) {
+      try {
+        const idParams = new URLSearchParams({
+          get_all_ids: "true",
+          search: search,
+          genre: genre,
+          status: status,
+          added_by: addedBy,
+        });
+        const idRes = await fetch(`/api/tracks/download_queue?${idParams.toString()}`);
+        const idData = await idRes.json();
+        if (idData.success && idData.ids) {
+          queueSelectedIds.clear();
+          const targetIds = idData.ids.slice(0, desiredLimit);
+          targetIds.forEach((id) => queueSelectedIds.add(id));
+        }
+      } catch (eId) {
+        console.debug("Failed to auto-select IDs:", eId);
+      }
+    }
+
     const queryParams = new URLSearchParams({
       page: page,
       limit: limit,
@@ -703,11 +741,6 @@ async function loadDownloadQueue(page = 1) {
       downloadQueueTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-dim" style="padding: 24px;">🎉 Không có bài hát nào phù hợp với bộ lọc hiện tại.</td></tr>`;
       updateDownloadSelectionCount();
       return;
-    }
-
-    // Default: If queueSelectedIds is empty on initial open, select all items on this page
-    if (queueSelectedIds.size === 0 && search === "" && page === 1) {
-      queueCurrentPageTracks.forEach((t) => queueSelectedIds.add(t.spotify_id));
     }
 
     downloadQueueTableBody.innerHTML = queueCurrentPageTracks.map((t) => {
@@ -773,7 +806,7 @@ if (queueSearchInput) {
   queueSearchInput.addEventListener("input", () => {
     clearTimeout(queueSearchDebounceTimer);
     queueSearchDebounceTimer = setTimeout(() => {
-      loadDownloadQueue(1);
+      loadDownloadQueue(1, false);
     }, 300);
   });
 }
@@ -782,16 +815,26 @@ if (queueSearchInput) {
 [queueFilterStatus, queueFilterGenre, queueFilterUser, queueLimitSelect].forEach((el) => {
   if (el) {
     el.addEventListener("change", () => {
-      loadDownloadQueue(1);
+      loadDownloadQueue(1, false);
     });
   }
 });
+
+// Auto-sync when user edits the main Limit input
+const dlLimitInput = document.getElementById("download-limit");
+if (dlLimitInput) {
+  dlLimitInput.addEventListener("input", () => {
+    if (downloadPreviewSection && downloadPreviewSection.style.display !== "none") {
+      loadDownloadQueue(1, true);
+    }
+  });
+}
 
 // Pagination clicks
 if (btnQueuePrevPage) {
   btnQueuePrevPage.addEventListener("click", () => {
     if (queueCurrentPage > 1) {
-      loadDownloadQueue(queueCurrentPage - 1);
+      loadDownloadQueue(queueCurrentPage - 1, false);
     }
   });
 }
@@ -799,7 +842,7 @@ if (btnQueuePrevPage) {
 if (btnQueueNextPage) {
   btnQueueNextPage.addEventListener("click", () => {
     if (queueCurrentPage < queueTotalPages) {
-      loadDownloadQueue(queueCurrentPage + 1);
+      loadDownloadQueue(queueCurrentPage + 1, false);
     }
   });
 }
@@ -883,7 +926,7 @@ if (btnQueueClearSelection) {
 
 if (btnPreviewDownloadQueue) {
   btnPreviewDownloadQueue.addEventListener("click", () => {
-    loadDownloadQueue(1);
+    loadDownloadQueue(1, true);
   });
 }
 
@@ -894,22 +937,29 @@ if (btnCloseDownloadPreview) {
 }
 
 function triggerConfirmedDownload(specificIds = null) {
-  const delay = inputDelay ? parseFloat(inputDelay.value) || 3.0 : 3.0;
-  const retryFailed = queueFilterStatus ? queueFilterStatus.value === "failed" : false;
-  const limit = inputLimit ? parseInt(inputLimit.value) || 50 : 50;
+  const dlDelayInput = document.getElementById("download-delay");
+  const dlLimitInput = document.getElementById("download-limit");
+  const dlConcurrencySelect = document.getElementById("download-concurrency");
+  const dlRetryFailedCb = document.getElementById("download-retry-failed");
+
+  const delay = dlDelayInput ? parseFloat(dlDelayInput.value) || 1.0 : 1.0;
+  const retryFailed = dlRetryFailedCb ? dlRetryFailedCb.checked : false;
+  const limit = dlLimitInput ? parseInt(dlLimitInput.value) || 50 : 50;
+  const concurrency = dlConcurrencySelect ? parseInt(dlConcurrencySelect.value) || 4 : 4;
 
   socket.emit("start_download", {
     limit: limit,
     delay: delay,
+    concurrency: concurrency,
     retry_failed: retryFailed,
     specific_ids: specificIds,
   });
 
   if (specificIds && specificIds.length > 0) {
-    appendLog(`🎧 Đã kích hoạt tải audio cho ${specificIds.length} bài hát đã chọn (Delay: ${delay}s)...`, "info");
+    appendLog(`🎧 Đã kích hoạt tải audio cho ${specificIds.length} bài hát đã chọn (${concurrency} luồng song song, Delay: ${delay}s)...`, "info");
     if (downloadPreviewSection) downloadPreviewSection.style.display = "none";
   } else {
-    appendLog(`🎧 Đã kích hoạt tải audio (Limit: ${limit}, Delay: ${delay}s)...`, "info");
+    appendLog(`🎧 Đã kích hoạt tải audio (Limit: ${limit}, ${concurrency} luồng song song, Delay: ${delay}s)...`, "info");
   }
 }
 
@@ -942,8 +992,8 @@ if (btnStartDownload) {
       return;
     }
 
-    // Otherwise, open the rich queue manager for review
-    loadDownloadQueue(1);
+    // Otherwise, open the rich queue manager for review with synchronized limit
+    loadDownloadQueue(1, true);
   });
 }
 
