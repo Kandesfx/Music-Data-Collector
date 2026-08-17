@@ -1684,12 +1684,18 @@ def get_network_shield_status():
     try:
         warp_status = WarpController.get_status()
         active_proxy = controller.pm.get_proxy()
-        egress = ProxyManager.inspect_proxy_egress(active_proxy)
+        
+        # If WARP is connected and no other proxy is explicitly chosen, use WARP SOCKS5
+        test_target_proxy = active_proxy
+        if not test_target_proxy and warp_status.get("is_connected"):
+            test_target_proxy = WarpController.DEFAULT_PROXY_URL
+
+        egress = ProxyManager.inspect_proxy_egress(test_target_proxy)
         direct_info = ProxyManager.inspect_proxy_egress(None)
 
-        is_protected = (
-            (warp_status.get("is_connected") and not egress.get("is_datacenter"))
-            or (active_proxy and not egress.get("is_datacenter"))
+        is_protected = bool(
+            (warp_status.get("is_connected") and egress.get("success") and not egress.get("is_datacenter"))
+            or (active_proxy and egress.get("success") and not egress.get("is_datacenter"))
             or (egress.get("ip") != direct_info.get("ip") and egress.get("success"))
         )
 
@@ -1722,7 +1728,7 @@ def toggle_warp_endpoint():
     if enable:
         ok = WarpController.connect()
         if ok:
-            # Ensure WARP is in DB proxies
+            # Ensure WARP is in DB proxies and enabled
             controller.db.upsert_proxy({
                 "id": "proxy_cloudflare_warp",
                 "name": "Cloudflare WARP Anycast SOCKS5 Gateway",
@@ -1731,6 +1737,7 @@ def toggle_warp_endpoint():
                 "is_active": True,
                 "is_warp": True,
             })
+            controller.pm.toggle(True)
             controller.pm.sync_from_db()
             controller.log("🛡️ Đã kết nối Cloudflare WARP SOCKS5 Gateway (127.0.0.1:40000). IP Datacenter đã được ẩn!", level="success")
             return jsonify({"success": True, "status": "CONNECTED", "warp": WarpController.get_status()})
