@@ -13,7 +13,7 @@ from src.storage.file_manager import FileManager
 from src.utils.session_manager import SessionManager
 from src.utils.proxy_manager import ProxyManager
 from src.utils.health_checker import HealthChecker
-from src.utils.cookie_health import CookieHealthChecker
+from src.utils.cookie_checker import CookieHealthChecker
 from src.utils.fingerprints import FingerprintGenerator
 
 print("=== 1. Checking Cookie Health on Server ===")
