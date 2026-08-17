@@ -1590,8 +1590,25 @@ def api_verify_single_track(spotify_id):
 
 @app.route("/api/tracks/bulk_verify", methods=["POST"])
 def api_bulk_verify_tracks():
-    """Run bulk AI moderation verification across all downloaded tracks."""
-    tracks = list(controller.db.db["tracks"].find({"download_status": "completed"}))
+    """Run bulk AI moderation verification across downloaded tracks (skips already verified tracks unless force=True)."""
+    body = request.get_json(silent=True) or {}
+    force = bool(body.get("force", False))
+
+    query = {"download_status": "completed"}
+    if not force:
+        query["moderation_score"] = {"$exists": False}
+
+    tracks = list(controller.db.db["tracks"].find(query))
+    if not tracks and not force:
+        return jsonify({
+            "success": True,
+            "total_verified": 0,
+            "approved": 0,
+            "flagged": 0,
+            "rejected": 0,
+            "message": "Toàn bộ bài hát đã được kiểm duyệt trước đó! Không cần kiểm duyệt lại.",
+        })
+
     verified_count = 0
     approved_count = 0
     flagged_count = 0
