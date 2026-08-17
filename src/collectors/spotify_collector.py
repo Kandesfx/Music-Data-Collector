@@ -237,13 +237,14 @@ class SpotifyCollector:
     def collect_by_album(
         self,
         album_name_or_url: str,
+        max_tracks: int = 50,
         default_genre: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Crawl all tracks from an album by Spotify URL or Album search.
         """
         sid, stype = self.extract_spotify_id_and_type(album_name_or_url)
-        logger.info(f"💿 Collecting album tracks: '{album_name_or_url}'...")
+        logger.info(f"💿 Collecting album tracks: '{album_name_or_url}' (limit: {max_tracks})...")
         tracks: List[Dict[str, Any]] = []
 
         if stype == "album" or (sid and len(sid) == 22):
@@ -278,7 +279,7 @@ class SpotifyCollector:
                 return tracks
 
         # Fallback to search query
-        return self.collect_by_keyword(album_name_or_url, max_tracks=20, default_genre=default_genre)
+        return self.collect_by_keyword(album_name_or_url, max_tracks=max_tracks, default_genre=default_genre)
 
     def collect_by_keyword(
         self,
@@ -292,61 +293,71 @@ class SpotifyCollector:
         logger.info(f"🔍 Searching Spotify tracks with query: '{query}' (limit: {max_tracks})...")
         tracks: List[Dict[str, Any]] = []
 
-        # 1. Try Spotipy search with pagination
+        # 1. Try Spotipy search with safe chunk pagination (limit max 20 per call)
         if self.sp:
             try:
                 offset = 0
-                while len(tracks) < max_tracks:
-                    fetch_limit = min(50, max_tracks - len(tracks))
-                    res = self.sp.search(query, type="track", limit=fetch_limit, offset=offset)
+                while len(tracks) < max_tracks and offset < 200:
+                    chunk_limit = min(20, max_tracks - len(tracks))
+                    res = self.sp.search(query, type="track", limit=chunk_limit, offset=offset)
                     items = res.get("tracks", {}).get("items", [])
                     if not items:
                         break
+                    existing_sids = {t["spotify_id"] for t in tracks}
                     for t in items:
+                        if t.get("id") not in existing_sids:
+                            clean_t = self._clean_track_dict(t, default_genre=default_genre)
+                            if clean_t:
+                                tracks.append(clean_t)
+                                existing_sids.add(t.get("id"))
+                    if len(items) < chunk_limit or not res.get("tracks", {}).get("next"):
+                        break
+                    offset += len(items)
+                if len(tracks) >= max_tracks:
+                    return tracks[:max_tracks]
+            except Exception as ex:
+                logger.warning(f"Spotipy search notice: {ex}")
+
+        # 2. Try FreeSpotify search
+        if self.free_sp and len(tracks) < max_tracks:
+            try:
+                res = self.free_sp.search(query, type="track", limit=20)
+                items = res.get("tracks", {}).get("items", [])
+                existing_sids = {t["spotify_id"] for t in tracks}
+                for t in items:
+                    tid = t.get("id") if isinstance(t, dict) else None
+                    if tid and tid not in existing_sids:
                         clean_t = self._clean_track_dict(t, default_genre=default_genre)
                         if clean_t:
                             tracks.append(clean_t)
-                    if len(items) < fetch_limit or not res.get("tracks", {}).get("next"):
-                        break
-                    offset += len(items)
-                if tracks:
-                    return tracks
-            except Exception as ex:
-                logger.warning(f"Spotipy search error: {ex}")
-
-        # 2. Try FreeSpotify search
-        if self.free_sp:
-            try:
-                res = self.free_sp.search(query, type="track", limit=min(50, max_tracks))
-                items = res.get("tracks", {}).get("items", [])
-                for t in items:
-                    clean_t = self._clean_track_dict(t, default_genre=default_genre)
-                    if clean_t:
-                        tracks.append(clean_t)
+                            existing_sids.add(tid)
                     if len(tracks) >= max_tracks:
                         break
-                if tracks:
-                    return tracks
+                if len(tracks) >= max_tracks:
+                    return tracks[:max_tracks]
             except Exception as e:
                 logger.debug(f"FreeSpotify search notice: {e}")
 
         # 3. Resilient Public Search API Fallback (iTunes / Apple Music Engine)
-        if not tracks or len(tracks) < max_tracks:
+        if len(tracks) < max_tracks:
             try:
                 import urllib.request
                 import urllib.parse
                 safe_q = urllib.parse.quote(query)
-                itunes_url = f"https://itunes.apple.com/search?term={safe_q}&media=music&entity=song&limit={min(200, max_tracks)}&country=VN"
+                itunes_limit = min(200, max_tracks * 2)
+                itunes_url = f"https://itunes.apple.com/search?term={safe_q}&media=music&entity=song&limit={itunes_limit}&country=VN"
                 req = urllib.request.Request(itunes_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
                 with urllib.request.urlopen(req, timeout=5) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
-                    existing_ids = {t["spotify_id"] for t in tracks}
+                    existing_names = {Deduplicator.normalize_comparison_key(t.get("name", ""), t.get("artist_name", "")) for t in tracks}
+                    existing_sids = {t["spotify_id"] for t in tracks}
                     for it in data.get("results", []):
                         track_id = f"itunes_{it.get('trackId')}"
-                        if track_id in existing_ids:
-                            continue
                         art_name = it.get("artistName", "Unknown Artist")
                         t_name = it.get("trackName", "Unknown Track")
+                        comp_key = Deduplicator.normalize_comparison_key(t_name, art_name)
+                        if track_id in existing_sids or comp_key in existing_names:
+                            continue
                         alb_name = it.get("collectionName", "Single")
                         img_url = it.get("artworkUrl100", "").replace("100x100bb", "600x600bb")
                         dur_ms = it.get("trackTimeMillis", 210000)
@@ -368,12 +379,14 @@ class SpotifyCollector:
                             "disc_number": it.get("discNumber", 1),
                             "explicit": it.get("trackExplicitness") == "explicit",
                         })
+                        existing_names.add(comp_key)
+                        existing_sids.add(track_id)
                         if len(tracks) >= max_tracks:
                             break
             except Exception as e:
                 logger.debug(f"Search API fallback note: {e}")
 
-        return tracks
+        return tracks[:max_tracks]
 
     def collect_custom(
         self,
@@ -393,7 +406,7 @@ class SpotifyCollector:
         if "open.spotify.com" in query:
             sid, detected_type = self.extract_spotify_id_and_type(query)
             if detected_type == "album":
-                return self.collect_by_album(query, default_genre=default_genre)
+                return self.collect_by_album(query, max_tracks=max_tracks, default_genre=default_genre)
             elif detected_type == "artist":
                 return self.collect_by_artist(query, max_tracks=max_tracks, default_genre=default_genre)
             else:
@@ -402,7 +415,7 @@ class SpotifyCollector:
         if mode == "artist":
             return self.collect_by_artist(query, max_tracks=max_tracks, default_genre=default_genre)
         elif mode == "album":
-            return self.collect_by_album(query, default_genre=default_genre)
+            return self.collect_by_album(query, max_tracks=max_tracks, default_genre=default_genre)
         elif mode == "search":
             return self.collect_by_keyword(query, max_tracks=max_tracks, default_genre=default_genre)
         elif mode in ("playlist", "curated"):
