@@ -145,31 +145,47 @@ class DownloadManager:
         method_used: Optional[str] = None
         error_message: Optional[str] = None
         current_proxy = self.proxy_manager.get_proxy()
+        expected_sec = (duration_ms / 1000.0) if duration_ms else None
 
-        # ─── 1. Primary Engine: YTMusic Precision Matcher ─────────
+        # ─── 1. Primary Engine: YTMusic Precision Matcher (Multi-Candidate) ──
         logger.info(f"Searching official master audio for: {artist} - {title}...")
-        yt_match = self.matcher.find_best_match(
+        candidates = self.matcher.find_candidates_ranked(
             artist=artist,
             title=title,
             duration_ms=duration_ms,
+            max_candidates=3,
         )
 
-        if yt_match and yt_match.get("youtube_url"):
-            yt_url = yt_match["youtube_url"]
-            score = yt_match.get("score", 0)
-            logger.info(f"Found YTMusic match ({score:.0f}%): {yt_match.get('title')} ({yt_match.get('duration')}) -> Downloading...")
+        for cand in candidates:
+            yt_url = cand.get("youtube_url")
+            score = cand.get("score", 0)
+            logger.info(f"Evaluating candidate ({score:.0f}%): {cand.get('title')} ({cand.get('duration')}) -> Downloading...")
             ytdlp_ok, ytdlp_file, ytdlp_err = self._download_ytdlp(
                 target_url_or_query=yt_url,
                 output_dir=temp_dir,
                 proxy=current_proxy,
             )
             if ytdlp_ok and ytdlp_file and ytdlp_file.exists():
-                downloaded_file = ytdlp_file
-                method_used = "ytmusic_precision"
+                # Sanity check candidate audio with Post-Download Duration & Header Guard
+                is_valid, val_err = PostProcessor.validate_audio_file(
+                    ytdlp_file,
+                    expected_duration_sec=expected_sec,
+                    max_duration_delta_sec=18.0,
+                )
+                if is_valid:
+                    downloaded_file = ytdlp_file
+                    method_used = "ytmusic_precision"
+                    break
+                else:
+                    logger.warning(f"⚠️ Candidate {cand.get('title')} failed post-download guard ({val_err}). Trying next candidate...")
+                    try:
+                        ytdlp_file.unlink(missing_ok=True)
+                    except Exception:
+                        pass
 
         # ─── 2. Secondary Engine: General yt-dlp Search ──────────
         if not downloaded_file:
-            logger.info(f"YTMusic direct match unavailable. Trying general yt-dlp search: {artist} - {title}...")
+            logger.info(f"YTMusic precision candidates unavailable/rejected. Trying general yt-dlp search: {artist} - {title}...")
             search_query = f"{artist} - {title}"
             ytdlp_ok, ytdlp_file, ytdlp_err = self._download_ytdlp(
                 target_url_or_query=search_query,
@@ -177,21 +193,24 @@ class DownloadManager:
                 proxy=current_proxy,
             )
             if ytdlp_ok and ytdlp_file and ytdlp_file.exists():
-                downloaded_file = ytdlp_file
-                method_used = "ytdlp_search"
+                is_valid, _ = PostProcessor.validate_audio_file(ytdlp_file, expected_duration_sec=expected_sec)
+                if is_valid:
+                    downloaded_file = ytdlp_file
+                    method_used = "ytdlp_search"
+
+        # ─── 3. Tertiary Engine: spotDL Fallback ───────────
+        if not downloaded_file:
+            logger.warning("yt-dlp search failed/rejected. Falling back to spotDL...")
+            spotdl_ok, spotdl_file, spotdl_err = self._download_spotdl(
+                spotify_url=spotify_url,
+                output_dir=temp_dir,
+                proxy=current_proxy,
+            )
+            if spotdl_ok and spotdl_file and spotdl_file.exists():
+                downloaded_file = spotdl_file
+                method_used = "spotdl"
             else:
-                # ─── 3. Tertiary Engine: spotDL Fallback ───────────
-                logger.warning(f"yt-dlp search failed ({ytdlp_err}). Falling back to spotDL...")
-                spotdl_ok, spotdl_file, spotdl_err = self._download_spotdl(
-                    spotify_url=spotify_url,
-                    output_dir=temp_dir,
-                    proxy=current_proxy,
-                )
-                if spotdl_ok and spotdl_file and spotdl_file.exists():
-                    downloaded_file = spotdl_file
-                    method_used = "spotdl"
-                else:
-                    error_message = f"yt-dlp: {ytdlp_err} | spotDL: {spotdl_err}"
+                error_message = f"yt-dlp: {ytdlp_err} | spotDL: {spotdl_err}"
 
         # ─── 4. Validate, Tag, Extract Lyrics & Finalize ──────────
         if downloaded_file and downloaded_file.exists():

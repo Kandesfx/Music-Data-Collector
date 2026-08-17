@@ -22,13 +22,18 @@ class PostProcessor:
     """Validates MP3 files and embeds rich ID3 tags (including lyrics and cover art)."""
 
     @staticmethod
-    def validate_audio_file(filepath: Path) -> Tuple[bool, Optional[str]]:
+    def validate_audio_file(
+        filepath: Path,
+        expected_duration_sec: Optional[float] = None,
+        max_duration_delta_sec: float = 18.0,
+    ) -> Tuple[bool, Optional[str]]:
         """
         Check if an audio file is a valid, readable MP3 and meets criteria:
         - Exists
         - Size between min and max size
         - Has valid MP3 header
         - Duration is acceptable (30s <= duration <= 3600s)
+        - Matches expected duration if provided (tolerance window check)
         """
         if not filepath.exists():
             return False, "File does not exist"
@@ -50,6 +55,13 @@ class PostProcessor:
 
             if duration < min_dur or duration > max_dur:
                 return False, f"Invalid duration: {duration:.1f}s (expected {min_dur}s - {max_dur}s)"
+
+            # Sanity Check: Compare actual MP3 length with ground truth Spotify track length
+            if expected_duration_sec and expected_duration_sec > 0:
+                delta = abs(duration - expected_duration_sec)
+                rel_diff = delta / expected_duration_sec
+                if delta > max_duration_delta_sec and rel_diff > 0.15:
+                    return False, f"Duration mismatch: downloaded audio is {duration:.1f}s, expected {expected_duration_sec:.1f}s (delta: {delta:.1f}s > {max_duration_delta_sec}s)"
 
             return True, None
         except HeaderNotFoundError:
