@@ -2121,27 +2121,37 @@
               <span>🍪</span> HƯỚNG DẪN XUẤT COOKIE YOUTUBE CHUẨN NETSCAPE (VƯỢT BOT CHECK 100%)
             </h4>
             <p style="color: var(--text-main); margin-bottom: 0;">
-              Khi máy chủ tải âm thanh từ YouTube với tần suất liên tục, YouTube sẽ chặn yêu cầu với lỗi Bot Detection hoặc mã lỗi 429 Rate Limit. Việc nạp Cookie xác thực phiên đăng nhập giúp hệ thống <b>vượt qua 100% rào cản</b> và tải bài hát ổn định vĩnh viễn.
+              Khi máy chủ đám mây (Oracle Cloud Datacenter) tải âm thanh từ YouTube, YouTube sẽ kích hoạt cơ chế <b>Bot Challenge</b> (<code>Sign in to confirm you're not a bot</code>). Việc nạp Cookie hợp lệ giúp hệ thống <b>vượt qua 100% rào cản</b> và tải bài hát chuẩn master 320kbps + Lời đồng bộ <code>.lrc</code>.
             </p>
           </div>
 
-          <h4 style="color: var(--accent-cyan); font-size: 13px;">🛠️ Các Bước Xuất File cookies.txt Chuẩn Netscape:</h4>
+          <!-- Important Note on Google Token Rotation -->
+          <div style="background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.3); border-radius: var(--radius-sm); padding: 12px 14px; font-size: 12px; color: #fde047;">
+            ⚠️ <b>Quy Tắc Vàng Tránh Lỗi "Cookie Bị Xoay Token" (Session Token Rotation):</b><br>
+            Google có cơ chế bảo mật tự động vô hiệu hóa token (<code>__Secure-3PSIDTS</code> / <code>LOGIN_INFO</code>) nếu tài khoản tiếp tục được sử dụng trên máy tính sau khi export hoặc khi bạn bấm nút "Đăng xuất".<br>
+            👉 <b>Khuyến nghị:</b> Hãy xuất cookie từ một cửa sổ <b>Ẩn Danh (Incognito)</b> hoặc Profile Chrome riêng, sau khi xuất <b>chỉ đóng tab ẩn danh, KHÔNG bấm Đăng xuất</b> trên YouTube!
+          </div>
+
+          <h4 style="color: var(--accent-cyan); font-size: 13px;">🛠️ 4 Bước Xuất File cookies.txt Chuẩn &amp; Sống Lâu:</h4>
           <div class="flex-col" style="gap: 8px;">
             <div style="background: var(--bg-card); border-left: 3px solid var(--accent-yellow); padding: 10px 14px; border-radius: var(--radius-sm);">
-              <b>Bước 1 - Cài Tiện Ích:</b> Cài đặt tiện ích mở rộng <b>Get cookies.txt LOCALLY</b> trên trình duyệt Chrome/Edge từ Chrome Web Store (Hoàn toàn mã nguồn mở, xử lý cục bộ không gửi dữ liệu ra ngoài).
+              <b>Bước 1 - Mở Cửa Sổ Ẩn Danh (Incognito Window):</b> Mở trình duyệt Chrome/Edge ở chế độ Ẩn Danh (hoặc tạo 1 Profile trình duyệt phụ riêng cho Studio).
             </div>
             <div style="background: var(--bg-card); border-left: 3px solid var(--accent-yellow); padding: 10px 14px; border-radius: var(--radius-sm);">
-              <b>Bước 2 - Đăng Nhập:</b> Mở trang web <a href="https://www.youtube.com" target="_blank" style="color: var(--accent-yellow); text-decoration: underline;">https://www.youtube.com</a> trên trình duyệt và đăng nhập tài khoản Google của bạn.
+              <b>Bước 2 - Đăng Nhập YouTube:</b> Truy cập <a href="https://www.youtube.com" target="_blank" style="color: var(--accent-yellow); text-decoration: underline;">https://www.youtube.com</a> và đăng nhập tài khoản Google (tài khoản phụ trợ).
             </div>
             <div style="background: var(--bg-card); border-left: 3px solid var(--accent-yellow); padding: 10px 14px; border-radius: var(--radius-sm);">
-              <b>Bước 3 - Xuất File:</b> Bấm vào biểu tượng tiện ích ở góc trên thanh công cụ ➡️ Bấm <b>Export</b> (hoặc chọn định dạng <i>Netscape</i>) ➡️ Tải file <code>cookies.txt</code> về máy tính.
+              <b>Bước 3 - Xuất File Netscape:</b> Dùng tiện ích mở rộng <b>Get cookies.txt LOCALLY</b> (hoặc Cookie-Editor) ➡️ Bấm <b>Export</b> ➡️ Lưu file <code>cookies.txt</code> về máy. Đóng cửa sổ ẩn danh (<i>Lưu ý: Không bấm nút Đăng xuất trên trang web</i>).
             </div>
             <div style="background: var(--bg-card); border-left: 3px solid var(--accent-yellow); padding: 10px 14px; border-radius: var(--radius-sm);">
-              <b>Bước 4 - Nạp Vào Hệ Thống:</b> Trên Dashboard, mở mục <b>🍪 Headless Cookies</b> ở menu bên trái ➡️ Bấm <b>➕ Thêm Cookie Mới</b> ➡️ Bấm <b>📁 Nạp Từ File .txt</b> để chọn file vừa tải ➡️ Bấm <b>⚡ Test Thử</b> để đo Ping ➡️ Bấm <b>💾 Lưu Vào Database</b>.
+              <b>Bước 4 - Nạp &amp; Kích Hoạt Trên Studio:</b> Trên Dashboard, mở mục <b>🍪 Headless Cookies</b> ở menu bên trái (hoặc <b>⚙️ Cài Đặt ➡️ YouTube Cookies Pool</b>) ➡️ Bấm <b>➕ Thêm Cookie Mới</b> ➡️ Dán nội dung vào ➡️ Bấm <b>⚡ Test Thử</b> để đo Ping ➡️ Bấm <b>💾 Lưu &amp; Kích Hoạt</b>.
             </div>
           </div>
-          <div style="background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.3); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 11.5px; color: #34d399;">
-            💡 <b>Cơ Chế Bảo Vệ Tự Động:</b> Cookies được lưu vĩnh viễn trong MongoDB. Hệ thống có bộ giám sát tự động: Nếu Cookie hết hạn giữa chừng khi đang tải batch, hệ thống sẽ <b>Tự động tạm dừng</b> và gửi thông báo cảnh báo tức thì!
+
+          <!-- Alternative: Tailscale Exit Node without Cookies -->
+          <div style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.3); border-radius: var(--radius-sm); padding: 12px 14px; font-size: 12px; color: #c4b5fd;">
+            💡 <b>Giải Pháp Thay Thế: Dùng Tailscale Mesh Exit Node (Không Cần Cookie):</b><br>
+            Nếu bạn không muốn thao tác nạp cookie, hãy bật <b>Tailscale Exit Node</b> (máy chủ sẽ mượn IP mạng nhà bạn như Viettel/VNPT/FPT). YouTube xem đây là IP người dùng thật nên tải trực tiếp 100% không cần Cookie! Xem chi tiết ở Tab 4 bên cạnh.
           </div>
         </div>
 

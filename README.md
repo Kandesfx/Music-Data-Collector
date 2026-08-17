@@ -206,10 +206,20 @@ Kết quả xuất ra tại `data/exports/`:
 
 ## 🛡️ Khắc Phục Sự Cố Thường Gặp (Troubleshooting)
 
-1. **Lỗi `403 Forbidden` hoặc `Sign in to confirm you're not a bot` khi tải YouTube:**
-   - Đảm bảo bạn đã cài `Deno` (`winget install DenoLand.Deno`).
-   - Đảm bảo trong file `.env` đã có `COOKIES_FROM_BROWSER=chrome` (hoặc `edge`/`firefox`) và bạn đã từng đăng nhập YouTube trên trình duyệt đó.
+1. **Lỗi `403 Forbidden` hoặc `Sign in to confirm you're not a bot` (YouTube Bot Challenge):**
+   - **Nguyên nhân:** YouTube chặn tải trực tiếp từ IP máy chủ Cloud (Oracle Cloud Datacenter) hoặc cookie bị Google xoay token (`__Secure-3PSIDTS` / `LOGIN_INFO`) sau khi đăng xuất/sử dụng trên máy tính.
+   - **Giải pháp 1 (Nạp Cookie Chuẩn - 1 Phút):**
+     1. Mở cửa sổ **Ẩn danh (Incognito)** hoặc Profile Chrome phụ riêng.
+     2. Đăng nhập [YouTube](https://www.youtube.com).
+     3. Dùng tiện ích `Get cookies.txt LOCALLY` xuất file Netscape `cookies.txt`.
+     4. Nạp vào Studio tại mục **🍪 Headless Cookies** -> Lưu & Kích hoạt (*Lưu ý: Chỉ đóng tab ẩn danh, KHÔNG bấm Đăng xuất trên YouTube*).
+   - **Giải pháp 2 (Dùng Tailscale Mesh Exit Node - Không Cần Cookie):**
+     - Bật Tailscale Exit Node trên máy tính cá nhân ở nhà (mạng VNPT/Viettel/FPT).
+     - Kết nối Tailscale trên Studio Dashboard -> Toàn bộ luồng tải sẽ đi qua IP dân cư thật, vượt 100% rào cản mà không cần Cookie.
+
 2. **Lỗi Spotify API `Invalid client secret`:**
-   - Kiểm tra `SPOTIFY_CLIENT_ID` và `SPOTIFY_CLIENT_SECRET` trong `config/.env`. Đăng ký miễn phí tại [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
+   - Kiểm tra `SPOTIFY_CLIENT_ID` và `SPOTIFY_CLIENT_SECRET` trong `config/.env` hoặc nạp trực tiếp qua tab **Spotify Apps Pool** trên giao diện Cài đặt.
+
 3. **Không kết nối được MongoDB:**
-   - Đảm bảo MongoDB đang chạy ở `localhost:27017` hoặc cập nhật `MONGO_URI` trong file `.env`. Nếu không có MongoDB, hệ thống vẫn lưu tiến trình qua `data/session.db` (SQLite).
+   - Đảm bảo MongoDB đang chạy ở `localhost:27017` hoặc cập nhật `MONGO_URI` trong file `config/.env`.
+
