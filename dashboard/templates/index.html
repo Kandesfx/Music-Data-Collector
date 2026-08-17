@@ -529,6 +529,9 @@
               <button id="btn-bulk-delete" class="btn btn-danger">
                 🗑️ Xóa Đã Chọn
               </button>
+              <button id="btn-bulk-verify-ai" class="btn btn-primary" style="background: linear-gradient(135deg, #06b6d4, #10b981); border: none; font-weight: 700;" title="Quét và chấm điểm kiểm duyệt 5 tiêu chí toàn bộ kho nhạc">
+                🛡️ Kiểm Duyệt AI Toàn Bộ
+              </button>
               <button id="btn-refresh-catalog" class="btn btn-secondary">
                 🔄 Làm Mới
               </button>
@@ -865,6 +868,7 @@
       <!-- Inspector Tabs -->
       <div class="flex-row" style="background: var(--bg-card-header); padding: 8px 18px; border-bottom: 1px solid var(--border-color); gap: 6px; overflow-x: auto;">
         <button class="inspector-tab-btn btn btn-primary" data-tab="tab-inspect-visual" style="font-size: 11.5px;">📋 Tổng Quan Trực Quan</button>
+        <button class="inspector-tab-btn btn btn-secondary" data-tab="tab-inspect-moderation" style="font-size: 11.5px; color: var(--accent-green); font-weight: 700;">🛡️ Báo Cáo Kiểm Duyệt AI</button>
         <button class="inspector-tab-btn btn btn-secondary" data-tab="tab-inspect-acoustic" style="font-size: 11.5px; color: var(--accent-cyan); font-weight: 700;">🧠 Đặc Trưng Âm Học AI</button>
         <button class="inspector-tab-btn btn btn-secondary" data-tab="tab-inspect-json" style="font-size: 11.5px;">📦 MongoDB Raw JSON</button>
         <button class="inspector-tab-btn btn btn-secondary" data-tab="tab-inspect-id3" style="font-size: 11.5px;">🏷️ Nhãn Nhúng ID3 MP3</button>
@@ -965,6 +969,72 @@
             </div>
             <div id="inspect-albums-list" class="flex-row" style="flex-wrap: wrap; gap: 8px;">
               <span style="font-size: 11px; color: var(--text-dim);">Chưa có liên kết album bổ sung.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: AI Post-Download Moderation Report -->
+        <div id="tab-inspect-moderation" class="inspector-tab-content flex-col" style="display: none; gap: 12px;">
+          <div class="flex-between" style="background: rgba(16,185,129,0.08); border: 1px solid var(--accent-green); border-radius: var(--radius-md); padding: 14px;">
+            <div>
+              <div style="font-weight: 700; color: var(--accent-green); font-size: 13.5px; display: flex; align-items: center; gap: 8px;">
+                <span>🛡️ Báo Cáo Kiểm Định Độ Chuẩn Xác Audio (5-Factor AI Moderation Matrix)</span>
+                <span id="inspect-mod-score-badge" class="badge badge-success" style="font-size: 11px; padding: 2px 8px;">100 / 100 ĐIỂM</span>
+              </div>
+              <div id="inspect-mod-summary-text" style="font-size: 11.5px; color: var(--text-dim); margin-top: 3px;">
+                Đang nạp dữ liệu kiểm định...
+              </div>
+            </div>
+            <button id="btn-reverify-track" class="btn btn-success" style="padding: 5px 12px; font-size: 11.5px; font-weight: 700;">
+              🔄 Chạy Lại Kiểm Duyệt
+            </button>
+          </div>
+
+          <!-- 5 Criteria Scorecard Grid -->
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Criterion 1 -->
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 14px;">
+              <div class="flex-between">
+                <span style="font-weight: 700; font-size: 12px; color: var(--text-main);">1. ⏱️ Độ Khớp Thời Lượng &amp; Cắt Đoạn Im Lặng (Leading Silence)</span>
+                <span id="inspect-mod-c1-score" class="font-mono" style="font-weight: 700; color: var(--accent-cyan);">40 / 40 đ</span>
+              </div>
+              <div id="inspect-mod-c1-note" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">-</div>
+            </div>
+
+            <!-- Criterion 2 -->
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 14px;">
+              <div class="flex-between">
+                <span style="font-weight: 700; font-size: 12px; color: var(--text-main);">2. 🎧 Chuẩn Âm Thanh Phòng Thu (Bitrate 320k &amp; 44.1kHz Stereo)</span>
+                <span id="inspect-mod-c2-score" class="font-mono" style="font-weight: 700; color: var(--accent-cyan);">20 / 20 đ</span>
+              </div>
+              <div id="inspect-mod-c2-note" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">-</div>
+            </div>
+
+            <!-- Criterion 3 -->
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 14px;">
+              <div class="flex-between">
+                <span style="font-weight: 700; font-size: 12px; color: var(--text-main);">3. 🔊 Âm Lượng Chuẩn Phát Thanh EBU R128 (-16.0 đến -10.0 LUFS)</span>
+                <span id="inspect-mod-c3-score" class="font-mono" style="font-weight: 700; color: var(--accent-cyan);">15 / 15 đ</span>
+              </div>
+              <div id="inspect-mod-c3-note" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">-</div>
+            </div>
+
+            <!-- Criterion 4 -->
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 14px;">
+              <div class="flex-between">
+                <span style="font-weight: 700; font-size: 12px; color: var(--text-main);">4. 🏷️ Tính Toàn Vẹn Nhãn ID3v2.3 &amp; Ảnh Bìa HD Nhúng</span>
+                <span id="inspect-mod-c4-score" class="font-mono" style="font-weight: 700; color: var(--accent-cyan);">15 / 15 đ</span>
+              </div>
+              <div id="inspect-mod-c4-note" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">-</div>
+            </div>
+
+            <!-- Criterion 5 -->
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 14px;">
+              <div class="flex-between">
+                <span style="font-weight: 700; font-size: 12px; color: var(--text-main);">5. 🎤 Đồng Bộ Lời Bài Hát Karaoke (.lrc Timestamps)</span>
+                <span id="inspect-mod-c5-score" class="font-mono" style="font-weight: 700; color: var(--accent-cyan);">10 / 10 đ</span>
+              </div>
+              <div id="inspect-mod-c5-note" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">-</div>
             </div>
           </div>
         </div>

@@ -39,6 +39,7 @@ from src.utils.lock_manager import lock_manager
 from src.utils.hardware_monitor import HardwareMonitor
 from src.storage.cache_manager import ram_cache
 from src.processors.audio_feature_extractor import AudioFeatureExtractor
+from src.processors.audio_verifier import AudioVerifier
 from src.processors.enrichment_daemon import enrichment_daemon
 from src.utils.logger import get_logger
 
@@ -1553,6 +1554,71 @@ def api_clear_ram_cache():
     """Clear RAM cache entries."""
     ram_cache.clear()
     return jsonify({"success": True, "message": "Đã làm trống bộ nhớ đệm RAM thành công!"})
+
+
+# ─── AI Audio Moderation & Verification REST APIs ────────────
+
+@app.route("/api/tracks/<spotify_id>/moderation_report", methods=["GET"])
+def api_get_moderation_report(spotify_id):
+    """Retrieve full 5-factor moderation report for a track."""
+    track = controller.db.get_track(spotify_id)
+    if not track:
+        return jsonify({"success": False, "error": "Không tìm thấy bài hát"}), 404
+
+    report = track.get("moderation_report")
+    if not report and track.get("local_path"):
+        report = AudioVerifier.verify_and_update_db(spotify_id, controller.db)
+
+    if report:
+        return jsonify({"success": True, "report": report})
+    return jsonify({"success": False, "error": "Chưa có báo cáo kiểm duyệt cho bài hát này"}), 404
+
+
+@app.route("/api/tracks/<spotify_id>/verify", methods=["POST"])
+def api_verify_single_track(spotify_id):
+    """Trigger real-time AI moderation verification for a single track."""
+    track = controller.db.get_track(spotify_id)
+    if not track or not track.get("local_path"):
+        return jsonify({"success": False, "error": "Bài hát chưa được tải về máy chủ"}), 400
+
+    report = AudioVerifier.verify_and_update_db(spotify_id, controller.db)
+    if report.get("success"):
+        controller.broadcast_stats()
+        return jsonify({"success": True, "report": report})
+    return jsonify({"success": False, "error": report.get("reason", "Lỗi kiểm duyệt")}), 500
+
+
+@app.route("/api/tracks/bulk_verify", methods=["POST"])
+def api_bulk_verify_tracks():
+    """Run bulk AI moderation verification across all downloaded tracks."""
+    tracks = list(controller.db.db["tracks"].find({"download_status": "completed"}))
+    verified_count = 0
+    approved_count = 0
+    flagged_count = 0
+    rejected_count = 0
+
+    for t in tracks:
+        sp_id = t.get("spotify_id")
+        rep = AudioVerifier.verify_and_update_db(sp_id, controller.db)
+        if rep.get("success"):
+            verified_count += 1
+            st = rep.get("status")
+            if st == "approved":
+                approved_count += 1
+            elif st == "flagged":
+                flagged_count += 1
+            else:
+                rejected_count += 1
+
+    controller.broadcast_stats()
+    return jsonify({
+        "success": True,
+        "total_verified": verified_count,
+        "approved": approved_count,
+        "flagged": flagged_count,
+        "rejected": rejected_count,
+        "message": f"Đã hoàn thành kiểm duyệt {verified_count} bài hát (🟢 {approved_count} Chuẩn, 🟡 {flagged_count} Lưu ý, 🔴 {rejected_count} Không đạt)",
+    })
 
 
 @app.route("/api/network/fingerprints", methods=["GET"])

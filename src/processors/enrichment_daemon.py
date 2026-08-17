@@ -16,6 +16,7 @@ from config import settings
 from src.storage.db_manager import DBManager
 from src.collectors.lyrics_collector import LyricsCollector
 from src.processors.audio_feature_extractor import AudioFeatureExtractor
+from src.processors.audio_verifier import AudioVerifier
 from src.processors.post_processor import PostProcessor
 from src.utils.logger import get_logger
 
@@ -64,6 +65,7 @@ class AutoEnrichmentDaemon:
             try:
                 self._enrich_audio_features_pass()
                 self._enrich_lyrics_pass()
+                self._enrich_moderation_pass()
                 self.last_run_timestamp = time.strftime("%H:%M:%S %d/%m/%Y")
             except Exception as e:
                 logger.error(f"Error in AutoEnrichmentDaemon loop: {e}")
@@ -81,6 +83,7 @@ class AutoEnrichmentDaemon:
         try:
             self._enrich_audio_features_pass()
             self._enrich_lyrics_pass()
+            self._enrich_moderation_pass()
             self.last_run_timestamp = time.strftime("%H:%M:%S %d/%m/%Y")
         except Exception as e:
             logger.error(f"Manual enrichment pass failed: {e}")
@@ -189,6 +192,51 @@ class AutoEnrichmentDaemon:
                     logger.info(f"📝 [Enrichment] Found & saved lyrics for {artist} - {title}!")
             except Exception as e:
                 logger.debug(f"Failed to fetch lyrics for {sp_id}: {e}")
+
+    def _enrich_moderation_pass(self):
+        """Scan DB for completed tracks lacking moderation reports and evaluate them."""
+        if not self.db.is_connected():
+            return
+
+        tracks = list(self.db.db["tracks"].find({
+            "download_status": "completed",
+            "moderation_score": {"$exists": False}
+        }).limit(25))
+
+        if not tracks:
+            return
+
+        self.current_task_status = f"Running AI Audio Moderation ({len(tracks)} tracks)"
+
+        for track in tracks:
+            if self._stop_event.is_set():
+                break
+
+            sp_id = track.get("spotify_id")
+            rel_path = track.get("local_path")
+            if not rel_path:
+                continue
+
+            full_path = settings.BASE_DIR / rel_path
+            if not full_path.exists():
+                continue
+
+            try:
+                report = AudioVerifier.evaluate_track(track, full_path)
+                if report.get("success"):
+                    self.db.db["tracks"].update_one(
+                        {"spotify_id": sp_id},
+                        {
+                            "$set": {
+                                "moderation_status": report["status"],
+                                "moderation_score": report["score"],
+                                "moderation_report": report,
+                            }
+                        }
+                    )
+                    logger.info(f"🛡️ [Enrichment Moderation] {track.get('artist_name')} - {track.get('name')}: {report['score']}/100 ({report['status'].upper()})")
+            except Exception as e:
+                logger.debug(f"Failed moderation pass for {sp_id}: {e}")
 
     def get_status(self) -> Dict[str, Any]:
         """Return operational status and statistics."""

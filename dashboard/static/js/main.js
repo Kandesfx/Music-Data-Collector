@@ -2214,8 +2214,9 @@ async function openTrackInspector(spotifyId) {
       inspectBadgeAudio.className = t.download_status === "completed" ? "badge badge-success" : "badge badge-warning";
     }
     if (inspectBadgeModeration) {
-      inspectBadgeModeration.textContent = `🛡️ ${t.moderation_status || "approved"}`;
-      inspectBadgeModeration.className = t.moderation_status === "flagged" ? "badge badge-danger" : "badge badge-info";
+      const score = t.moderation_score !== undefined ? t.moderation_score : (t.moderation_status === "approved" ? 100 : 75);
+      inspectBadgeModeration.textContent = `🛡️ ${t.moderation_status || "approved"} (${score}/100)`;
+      inspectBadgeModeration.className = t.moderation_status === "rejected" ? "badge badge-danger" : (t.moderation_status === "flagged" ? "badge badge-warning" : "badge badge-success");
     }
     if (inspectBadgeCollector) {
       inspectBadgeCollector.textContent = `👤 ${t.added_by || "admin"}`;
@@ -5647,8 +5648,141 @@ socket.on("pipeline_lock_conflict", (data) => {
       if (spId && spId !== "-") {
         renderAcousticFeatures(spId);
       }
+    } else if (targetTab === "tab-inspect-moderation") {
+      const inspectIdEl = document.getElementById("inspect-spotify-id");
+      const spId = inspectIdEl ? inspectIdEl.textContent.trim() : null;
+      if (spId && spId !== "-") {
+        renderModerationReport(spId);
+      }
     }
   });
+
+  // 6. Populate AI Moderation Report Tab
+  async function renderModerationReport(spotifyId) {
+    currentInspectedTrackId = spotifyId;
+
+    const scoreBadge = document.getElementById("inspect-mod-score-badge");
+    const summaryText = document.getElementById("inspect-mod-summary-text");
+    const c1Score = document.getElementById("inspect-mod-c1-score");
+    const c1Note = document.getElementById("inspect-mod-c1-note");
+    const c2Score = document.getElementById("inspect-mod-c2-score");
+    const c2Note = document.getElementById("inspect-mod-c2-note");
+    const c3Score = document.getElementById("inspect-mod-c3-score");
+    const c3Note = document.getElementById("inspect-mod-c3-note");
+    const c4Score = document.getElementById("inspect-mod-c4-score");
+    const c4Note = document.getElementById("inspect-mod-c4-note");
+    const c5Score = document.getElementById("inspect-mod-c5-score");
+    const c5Note = document.getElementById("inspect-mod-c5-note");
+
+    if (summaryText) summaryText.textContent = "⏳ Đang tính toán 5 tiêu chí kiểm định AI...";
+
+    try {
+      const res = await fetch(`/api/tracks/${spotifyId}/moderation_report`);
+      const data = await res.json();
+      if (data.success && data.report) {
+        const r = data.report;
+        const b = r.breakdown || {};
+
+        if (scoreBadge) {
+          scoreBadge.textContent = `${r.score} / 100 ĐIỂM`;
+          if (r.score >= 85) {
+            scoreBadge.className = "badge badge-success";
+          } else if (r.score >= 65) {
+            scoreBadge.className = "badge badge-warning";
+          } else {
+            scoreBadge.className = "badge badge-danger";
+          }
+        }
+
+        if (summaryText) summaryText.textContent = r.summary || "Đã hoàn thành đánh giá toàn diện.";
+
+        if (c1Score && b.duration) c1Score.textContent = `${b.duration.score} / 40 đ`;
+        if (c1Note && b.duration) c1Note.textContent = b.duration.note || "-";
+
+        if (c2Score && b.quality) c2Score.textContent = `${b.quality.score} / 20 đ`;
+        if (c2Note && b.quality) c2Note.textContent = b.quality.note || "-";
+
+        if (c3Score && b.loudness) c3Score.textContent = `${b.loudness.score} / 15 đ`;
+        if (c3Note && b.loudness) c3Note.textContent = b.loudness.note || "-";
+
+        if (c4Score && b.metadata) c4Score.textContent = `${b.metadata.score} / 15 đ`;
+        if (c4Note && b.metadata) c4Note.textContent = b.metadata.note || "-";
+
+        if (c5Score && b.lyrics) c5Score.textContent = `${b.lyrics.score} / 10 đ`;
+        if (c5Note && b.lyrics) c5Note.textContent = b.lyrics.note || "-";
+      } else {
+        if (summaryText) summaryText.textContent = "Chưa có báo cáo kiểm định cho bài hát này.";
+      }
+    } catch (err) {
+      if (summaryText) summaryText.textContent = `Lỗi kiểm định: ${err.message}`;
+    }
+  }
+
+  window.renderModerationReport = renderModerationReport;
+
+  // 7. Re-verify Single Track Button Handler
+  const btnReverify = document.getElementById("btn-reverify-track");
+  if (btnReverify) {
+    btnReverify.addEventListener("click", async () => {
+      if (!currentInspectedTrackId) return;
+
+      btnReverify.disabled = true;
+      btnReverify.textContent = "⏳ Đang kiểm định...";
+
+      try {
+        const res = await fetch(`/api/tracks/${currentInspectedTrackId}/verify`, { method: "POST" });
+        const data = await res.json();
+        if (data.success) {
+          await renderModerationReport(currentInspectedTrackId);
+          if (typeof appendLog === "function") {
+            appendLog(`🛡️ [AI Moderation] Đã kiểm định lại: ${data.report.score}/100 (${data.report.status.toUpperCase()})!`, "success");
+          }
+          if (typeof loadCatalogTracks === "function") loadCatalogTracks(window.catalogCurrentPage || 1);
+        } else {
+          alert(`Lỗi kiểm định: ${data.error}`);
+        }
+      } catch (err) {
+        alert(`Lỗi: ${err.message}`);
+      } finally {
+        btnReverify.disabled = false;
+        btnReverify.textContent = "🔄 Chạy Lại Kiểm Duyệt";
+      }
+    });
+  }
+
+  // 8. Bulk Verify All Tracks Button Handler
+  const btnBulkVerify = document.getElementById("btn-bulk-verify-ai");
+  if (btnBulkVerify) {
+    btnBulkVerify.addEventListener("click", () => {
+      showConfirmModal({
+        title: "🛡️ Chạy Kiểm Duyệt AI Toàn Bộ Kho Dữ Liệu",
+        message: "Hệ thống sẽ dùng CPU đa luồng để phân tích độ khớp thời lượng, độ lớn LUFS, bitrate và lời bài hát cho <b>toàn bộ kho nhạc</b>.<br><br>Bạn có muốn bắt đầu ngay?",
+        proceedText: "🛡️ Bắt Đầu Kiểm Duyệt Toàn Diện",
+        isDanger: false,
+        onConfirm: async () => {
+          btnBulkVerify.disabled = true;
+          btnBulkVerify.textContent = "⏳ Đang chạy kiểm duyệt AI...";
+          appendLog("🛡️ Đang chạy kiểm duyệt AI toàn bộ kho nhạc theo ma trận 5 tiêu chí...", "info");
+
+          try {
+            const res = await fetch("/api/tracks/bulk_verify", { method: "POST" });
+            const data = await res.json();
+            if (data.success) {
+              appendLog(`🎉 ${data.message}`, "success");
+              if (typeof loadCatalogTracks === "function") loadCatalogTracks(window.catalogCurrentPage || 1);
+            } else {
+              alert(`Lỗi: ${data.error}`);
+            }
+          } catch (err) {
+            alert(`Lỗi kiểm duyệt: ${err.message}`);
+          } finally {
+            btnBulkVerify.disabled = false;
+            btnBulkVerify.textContent = "🛡️ Kiểm Duyệt AI Toàn Bộ";
+          }
+        }
+      });
+    });
+  }
 
 })();
 

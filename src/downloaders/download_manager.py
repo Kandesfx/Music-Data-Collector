@@ -25,6 +25,7 @@ from src.storage.file_manager import FileManager
 from src.storage.db_manager import DBManager
 from src.processors.post_processor import PostProcessor
 from src.processors.audio_feature_extractor import AudioFeatureExtractor
+from src.processors.audio_verifier import AudioVerifier
 from src.downloaders.ytmusic_matcher import YTMusicMatcher
 from src.collectors.lyrics_collector import LyricsCollector
 from src.utils.fingerprint_generator import FingerprintGenerator
@@ -294,6 +295,24 @@ class DownloadManager:
                         )
                 except Exception as ex_feat:
                     logger.debug(f"Audio feature extraction skipped for {spotify_id}: {ex_feat}")
+
+                # AI Post-Download Moderation Verification (5-factor 100-pt scorecard)
+                try:
+                    report = AudioVerifier.evaluate_track(track, final_path)
+                    if report.get("success"):
+                        self.db.db["tracks"].update_one(
+                            {"spotify_id": spotify_id},
+                            {
+                                "$set": {
+                                    "moderation_status": report["status"],
+                                    "moderation_score": report["score"],
+                                    "moderation_report": report,
+                                }
+                            }
+                        )
+                        logger.info(f"🛡️ [Moderation] {artist} - {title}: {report['score']}/100 ({report['status'].upper()})")
+                except Exception as ex_mod:
+                    logger.debug(f"Moderation evaluation skipped for {spotify_id}: {ex_mod}")
 
                 if session_id:
                     self.session_manager.checkpoint(
