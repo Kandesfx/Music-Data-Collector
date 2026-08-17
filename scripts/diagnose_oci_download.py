@@ -14,7 +14,7 @@ from src.utils.session_manager import SessionManager
 from src.utils.proxy_manager import ProxyManager
 from src.utils.health_checker import HealthChecker
 from src.utils.cookie_checker import CookieHealthChecker
-from src.utils.fingerprints import FingerprintGenerator
+from src.utils.fingerprint_generator import FingerprintGenerator
 
 print("=== 1. Checking Cookie Health on Server ===")
 health = CookieHealthChecker.check_health(probe_network=True)
