@@ -1318,13 +1318,18 @@ Khi triển khai hệ thống trên hạ tầng đám mây (Oracle Cloud Infrast
 - **Cơ chế:** Khởi chạy `cloudflare-warp` ở chế độ SOCKS5 Proxy trên cổng `127.0.0.1:40000`. Toàn bộ luồng tải nhạc của yt-dlp được định tuyến qua mạng Anycast của Cloudflare (IP `104.28.x.x`, AS13335), ẩn hoàn toàn IP gốc `158.178.247.33` của Oracle.
 - **Tương tác:** Công tắc Bật/Tắt 1-Click trên Web Dashboard (`POST /api/network/warp/toggle`).
 
-#### B. Bộ Giả Lập Dấu Vân Tay Trình Duyệt (Fingerprint Generator)
+#### B. Bộ Giả Lập Dấu Vân Tay & Hồ Sơ Trình Duyệt v4.0 (Browser Fingerprint Studio)
 - **Module:** [`src/utils/fingerprint_generator.py`](file:///d:/Hai/study/DATN/music-data-collector/src/utils/fingerprint_generator.py).
-- **Cơ chế:** Sinh các hồ sơ trình duyệt Desktop thật (Chrome 131, Edge 131 trên Windows 11 / macOS Sequoia), tự động đồng bộ:
-  - `User-Agent`: Chuẩn desktop browser 64-bit.
-  - `Sec-CH-UA`, `Sec-CH-UA-Platform`, `Sec-CH-UA-Mobile`: Khớp chính xác với thông số hệ điều hành.
-  - `Accept-Language`: `vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7`.
-- **Tích hợp:** Nhúng vào `SpotifyCollector`, `DownloadManager` (yt-dlp options), `YTMusicMatcher`.
+- **Tham khảo công nghệ:** Lấy cảm hứng từ các thư viện hàng đầu thế giới: `browser-forge`, `curl_cffi`, `playwright-stealth`, `scrapling`, và `fingerprint-suite` (Apify).
+- **Cơ chế mô phỏng tương quan 100% (Attribute Correlation Consistency):**
+  - **8 Hồ sơ thiết bị đa nền tảng:** Windows 11 (Chrome 132 NVIDIA RTX 4070, Edge 131 AMD Radeon RX 7800, Firefox 134 Intel Iris Xe), macOS Sequoia (Safari 18.2 Apple M3 Max, Chrome 131 Apple M2 Pro), Mobile (iPhone 16 Pro Max iOS 18.1, Samsung Galaxy S24 Ultra Android 14), Smart TV (Samsung Cobalt / InnerTube on TV).
+  - **Sec-CH-UA Client Hints:** Khớp chính xác `sec_ch_ua`, `sec_ch_ua_full_version_list`, `sec_ch_ua_platform`, `sec_ch_ua_platform_version`, `sec_ch_ua_arch`, `sec_ch_ua_bitness`, `sec_ch_ua_model`.
+  - **WebGL GPU Context:** Giả lập trung thực `unmasked_vendor` và `unmasked_renderer` của phần cứng card đồ họa thực tế (NVIDIA, AMD, Apple Metal, Intel).
+  - **Màn hình & DPI:** Kích thước `width`, `height`, `availWidth`, `availHeight`, `colorDepth` (24/30-bit), `devicePixelRatio` (1.0x, 1.25x, 2.0x, 3.0x, 3.75x).
+  - **Phần cứng thiết bị:** `hardwareConcurrency` (4 - 16 Cores), `deviceMemory` (4 - 36 GB), `maxTouchPoints` (0 trên Desktop, 5 trên Mobile).
+  - **Chữ ký TLS JA4 & InnerTube Player Context:** Khớp chữ ký TLS `t13d1516h2_8daaf6152771...` và đồng bộ client name (`WEB_REMIX`, `ANDROID_MUSIC`, `IOS_MUSIC`, `TVHTML5_SIMPLY_EMBEDDED_PLAYER`).
+- **DOM Stealth Polyfill (`get_dom_stealth_script`):** Tự động xóa bỏ cờ `navigator.webdriver = undefined`, mock `window.chrome.runtime`, và polyfill tham số màn hình / WebGL.
+- **REST APIs & Dashboard UI:** `/api/network/fingerprint/status`, `/api/network/fingerprint/switch`, `/api/network/fingerprint/test` với bảng điều khiển trực quan 6 thẻ thông số kỹ thuật và 1-Click Audit 7 điểm kiểm tra Anti-Detection.
 
 #### C. Bộ Điều Phối Proxy Xoay Vòng Đa Chiến Lược (ProxyManager)
 - **Module:** [`src/utils/proxy_manager.py`](file:///d:/Hai/study/DATN/music-data-collector/src/utils/proxy_manager.py).

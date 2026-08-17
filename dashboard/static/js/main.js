@@ -4629,6 +4629,10 @@ socket.on("track_redownloaded", (data) => {
       if (window.loadTailscaleStatus) {
         window.loadTailscaleStatus();
       }
+
+      if (window.refreshFingerprintStatus) {
+        window.refreshFingerprintStatus();
+      }
     } catch (e) {
       console.warn("Error refreshing shield status:", e);
     }
@@ -4825,6 +4829,120 @@ socket.on("track_redownloaded", (data) => {
     });
   }
 })();
+
+// ─── Browser Fingerprint & Anti-Detection Studio Controller ──────────────
+(function initFingerprintStudio() {
+  const profileSelect = document.getElementById("fp-profile-select");
+  const specUa = document.getElementById("fp-spec-ua");
+  const specCh = document.getElementById("fp-spec-ch");
+  const specGpu = document.getElementById("fp-spec-gpu");
+  const specScreen = document.getElementById("fp-spec-screen");
+  const specHw = document.getElementById("fp-spec-hw");
+  const specJa4 = document.getElementById("fp-spec-ja4");
+  const auditBox = document.getElementById("fp-audit-result-box");
+
+  function renderProfileSpecs(profile) {
+    if (!profile) return;
+    if (specUa) specUa.textContent = `${profile.browser}/${profile.browser_version || '132'} (${profile.os} ${profile.os_version || ''})`;
+    if (specCh) specCh.textContent = profile.sec_ch_ua || "Không dùng (Safari/Firefox Standard)";
+    
+    const webgl = profile.webgl || {};
+    if (specGpu) specGpu.textContent = `${webgl.unmasked_vendor || 'Google Inc.'} — ${webgl.unmasked_renderer || 'GPU Standard'}`;
+
+    const screen = profile.screen || {};
+    if (specScreen) specScreen.textContent = `${screen.width || 1920} x ${screen.height || 1080} (DPI: ${screen.devicePixelRatio || 1.0}x, ${screen.colorDepth || 24}-bit)`;
+
+    const hw = profile.hardware || {};
+    if (specHw) specHw.textContent = `${hw.hardware_concurrency || 8} Cores | ${hw.device_memory || 16} GB RAM | Touch: ${hw.max_touch_points || 0}`;
+
+    const innertube = profile.innertube_client || {};
+    if (specJa4) specJa4.textContent = `${profile.ja4_tls || 't13d1516h2_8daaf'} (${innertube.client_name || 'WEB_REMIX'})`;
+
+    if (profileSelect && profile.id) {
+      profileSelect.value = profile.id;
+    }
+  }
+
+  window.refreshFingerprintStatus = async function() {
+    try {
+      const res = await fetch("/api/network/fingerprint/status");
+      const data = await res.json();
+      if (data.success && data.active_profile) {
+        renderProfileSpecs(data.active_profile);
+      }
+    } catch (e) {
+      console.warn("Error fetching fingerprint status:", e);
+    }
+  };
+
+  window.switchFingerprint = async function(profileId) {
+    try {
+      const res = await fetch("/api/network/fingerprint/switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile_id: profileId }),
+      });
+      const data = await res.json();
+      if (data.success && data.active_profile) {
+        renderProfileSpecs(data.active_profile);
+        appendLog(`🎭 Đã chuyển đổi Hồ sơ giả lập Dấu vân tay: ${data.active_profile.name}`, "info");
+      }
+    } catch (e) {
+      alert(`Lỗi đổi hồ sơ vân tay: ${e.message}`);
+    }
+  };
+
+  window.applySelectedFingerprint = async function() {
+    if (!profileSelect) return;
+    await window.switchFingerprint(profileSelect.value);
+    alert("✅ Đã kích hoạt và đồng bộ hồ sơ giả lập vân tay trình duyệt thành công!");
+  };
+
+  window.randomizeFingerprint = async function() {
+    await window.switchFingerprint("random");
+    if (auditBox) {
+      auditBox.style.display = "none";
+    }
+  };
+
+  window.testFingerprint = async function() {
+    if (!auditBox) return;
+    auditBox.style.display = "block";
+    auditBox.innerHTML = `<span class="spinner-border spinner-border-sm"></span> <b>Đang thực hiện kiểm toán Anti-Detection Matrix (7 điểm kiểm tra)...</b>`;
+
+    try {
+      const res = await fetch("/api/network/fingerprint/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (data.success) {
+        const c = data.stealth_checks || {};
+        auditBox.innerHTML = `
+          <div style="font-weight: 700; color: #34d399; margin-bottom: 6px;">
+            ✅ KẾT QUẢ KIỂM TOÁN DẤU VÂN TAY (100% STEALTH PASSED):
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 10.5px;">
+            <div>🛡️ <b>Navigator Webdriver:</b> <span style="color: #34d399;">${c.navigator_webdriver}</span></div>
+            <div>🎯 <b>Client Hints:</b> <span style="color: #34d399;">${c.client_hints_consistent}</span></div>
+            <div>🎮 <b>GPU Vendor:</b> <span style="color: #38bdf8;">${c.webgl_gpu_vendor}</span></div>
+            <div>🎨 <b>GPU Renderer:</b> <span style="color: #38bdf8;">${c.webgl_gpu_renderer}</span></div>
+            <div>📐 <b>Màn hình & DPI:</b> <span style="color: #fbbf24;">${c.screen_resolution}</span></div>
+            <div>🔒 <b>TLS JA4 Hash:</b> <span style="color: #f472b6;">${c.ja4_tls_signature}</span></div>
+            <div>🎵 <b>InnerTube Client:</b> <span style="color: #a78bfa;">${c.innertube_client}</span></div>
+          </div>
+        `;
+      }
+    } catch (e) {
+      auditBox.innerHTML = `<div style="color: #f87171;">❌ Lỗi kiểm toán: ${e.message}</div>`;
+    }
+  };
+
+  document.addEventListener("DOMContentLoaded", () => {
+    window.refreshFingerprintStatus();
+  });
+})();
+
 // ─── Interactive System Guide Modal Controller ──────────────
 (function initGuideModal() {
   function switchGuideTab(tabId) {

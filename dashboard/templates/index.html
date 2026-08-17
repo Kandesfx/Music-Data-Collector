@@ -1424,17 +1424,77 @@
             </div>
           </div>
 
-          <!-- Section 3: Browser & TLS Fingerprint Spoofing Profile -->
-          <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(139,92,246,0.3); border-radius: var(--radius-md); padding: 14px; gap: 8px; display: flex; flex-direction: column;">
-            <div style="font-weight: 700; color: var(--accent-purple); font-size: 12.5px; display: flex; align-items: center; gap: 6px;">
-              <span>🎭</span> Hồ Sơ Giả Lập Dấu Vân Tay Trình Duyệt (Browser Fingerprint Spoofing)
+          <!-- Section 3: Browser & TLS Fingerprint Spoofing Studio -->
+          <div style="background: rgba(139,92,246,0.06); border: 1px solid rgba(139,92,246,0.35); border-radius: var(--radius-md); padding: 14px; gap: 10px; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="font-weight: 700; color: var(--accent-purple); font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                <span>🎭</span> BẢNG ĐIỀU KHIỂN HỒ SƠ GIẢ LẬP DẤU VÂN TAY (BROWSER FINGERPRINT STUDIO v4.0)
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <button id="btn-random-fp" class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px; border-color: rgba(139,92,246,0.5); color: #c084fc;" onclick="window.randomizeFingerprint()">
+                  🎲 Đổi Ngẫu Nhiên
+                </button>
+                <button id="btn-test-fp" class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px; border-color: var(--accent-cyan); color: var(--accent-cyan);" onclick="window.testFingerprint()">
+                  ⚡ Audit Dấu Vân Tay
+                </button>
+              </div>
             </div>
-            <div style="font-size: 11px; color: var(--text-dim);">
-              Hệ thống tự động nhúng các trường Client Hints (<code>Sec-CH-UA</code>), Locale (<code>vi-VN</code>, <code>en-US</code>), và User-Agent của Desktop Windows 11 thật để xóa bỏ mọi dấu vết của Linux/Server/Python.
+
+            <div style="font-size: 11px; color: var(--text-dim); line-height: 1.5;">
+              Hệ thống mô phỏng môi trường người dùng thật 100% dựa trên công nghệ của <b>browser-forge</b>, <b>curl_cffi</b>, và <b>playwright-stealth</b>: Tự động đồng bộ hóa tương quan giữa <b>User-Agent</b>, <b>Sec-CH-UA Client Hints</b>, <b>WebGL GPU context</b>, <b>Độ phân giải màn hình</b>, và <b>Chữ ký TLS JA4</b> để vượt qua mọi cơ chế kiểm tra bot của Google, YouTube và Cloudflare.
             </div>
-            <div style="background: rgba(0,0,0,0.4); border: 1px dashed rgba(139,92,246,0.4); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 11px; font-family: monospace; color: #c084fc;">
-              Active Profile: Google Chrome 131.0 on Windows 11 x64 (Sec-CH-UA: "Google Chrome";v="131", "Chromium";v="131")
+
+            <!-- Profile Selector -->
+            <div class="form-group" style="margin-bottom: 4px;">
+              <label class="form-label" style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Chọn Hồ Sơ Trình Duyệt / Thiết Bị Hoạt Động:</label>
+              <div style="display: flex; gap: 8px;">
+                <select id="fp-profile-select" class="input-field" style="font-size: 11.5px; font-weight: 600; color: #c084fc; background: rgba(0,0,0,0.5); border-color: rgba(139,92,246,0.4);" onchange="window.switchFingerprint(this.value)">
+                  <option value="win11_chrome_132_nv">🖥️ Chrome 132 — Windows 11 x64 (NVIDIA RTX 4070) [Mặc định]</option>
+                  <option value="win11_edge_131_amd">🖥️ MS Edge 131 — Windows 11 x64 (AMD Radeon RX 7800 XT)</option>
+                  <option value="macos_safari_18_m3">🍎 Safari 18.2 — macOS Sequoia (Apple M3 Max)</option>
+                  <option value="macos_chrome_131_m2">🍎 Chrome 131 — macOS Sequoia (Apple M2 Pro)</option>
+                  <option value="win11_firefox_134">🦊 Firefox 134 — Windows 11 x64 (Intel Iris Xe)</option>
+                  <option value="iphone_16_pro_safari_18">📱 Safari 18.0 — iPhone 16 Pro Max (iOS 18.1)</option>
+                  <option value="samsung_s24_chrome_131">📱 Chrome 131 — Samsung Galaxy S24 Ultra (Android 14)</option>
+                  <option value="smart_tv_tizen_youtube">📺 Smart TV Samsung Cobalt (YouTube on TV Client)</option>
+                  <option value="random">🎲 Tự Động Chọn Ngẫu Nhiên Mỗi Phiên (Auto Rotate)</option>
+                </select>
+                <button class="btn btn-primary" style="font-size: 11px; padding: 4px 12px; white-space: nowrap;" onclick="window.applySelectedFingerprint()">
+                  💾 Áp Dụng
+                </button>
+              </div>
             </div>
+
+            <!-- Deep Hardware & Fingerprint Spec Matrix -->
+            <div id="fp-details-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; font-size: 10.5px; font-family: monospace;">
+              <div style="background: rgba(0,0,0,0.4); border: 1px solid rgba(139,92,246,0.25); border-radius: var(--radius-sm); padding: 7px 9px;">
+                <div style="color: var(--text-muted); font-size: 9.5px; text-transform: uppercase;">🌐 User-Agent & Platform</div>
+                <div id="fp-spec-ua" style="color: #e2e8f0; font-weight: 600; margin-top: 3px; word-break: break-all;">Chrome/132.0.0.0 (Windows NT 10.0; Win64; x64)</div>
+              </div>
+              <div style="background: rgba(0,0,0,0.4); border: 1px solid rgba(139,92,246,0.25); border-radius: var(--radius-sm); padding: 7px 9px;">
+                <div style="color: var(--text-muted); font-size: 9.5px; text-transform: uppercase;">🎯 Client Hints (Sec-CH-UA)</div>
+                <div id="fp-spec-ch" style="color: #a78bfa; font-weight: 600; margin-top: 3px; word-break: break-all;">"Chromium";v="132", "Google Chrome";v="132"</div>
+              </div>
+              <div style="background: rgba(0,0,0,0.4); border: 1px solid rgba(139,92,246,0.25); border-radius: var(--radius-sm); padding: 7px 9px;">
+                <div style="color: var(--text-muted); font-size: 9.5px; text-transform: uppercase;">🎮 WebGL GPU Renderer</div>
+                <div id="fp-spec-gpu" style="color: #38bdf8; font-weight: 600; margin-top: 3px; word-break: break-all;">ANGLE (NVIDIA GeForce RTX 4070 Direct3D11)</div>
+              </div>
+              <div style="background: rgba(0,0,0,0.4); border: 1px solid rgba(139,92,246,0.25); border-radius: var(--radius-sm); padding: 7px 9px;">
+                <div style="color: var(--text-muted); font-size: 9.5px; text-transform: uppercase;">📐 Màn Hình & Tỷ Lệ DPI</div>
+                <div id="fp-spec-screen" style="color: #34d399; font-weight: 600; margin-top: 3px;">1920 x 1080 (DPI: 1.0x, 24-bit color)</div>
+              </div>
+              <div style="background: rgba(0,0,0,0.4); border: 1px solid rgba(139,92,246,0.25); border-radius: var(--radius-sm); padding: 7px 9px;">
+                <div style="color: var(--text-muted); font-size: 9.5px; text-transform: uppercase;">⚙️ Phần Cứng & RAM Thiết Bị</div>
+                <div id="fp-spec-hw" style="color: #fbbf24; font-weight: 600; margin-top: 3px;">16 CPU Cores | 16 GB RAM | Touch: 0</div>
+              </div>
+              <div style="background: rgba(0,0,0,0.4); border: 1px solid rgba(139,92,246,0.25); border-radius: var(--radius-sm); padding: 7px 9px;">
+                <div style="color: var(--text-muted); font-size: 9.5px; text-transform: uppercase;">🔒 Chữ Ký TLS JA4 & Client</div>
+                <div id="fp-spec-ja4" style="color: #f472b6; font-weight: 600; margin-top: 3px; word-break: break-all;">t13d1516h2_8daaf6152771 (WEB_REMIX)</div>
+              </div>
+            </div>
+
+            <!-- Live Audit Output Box -->
+            <div id="fp-audit-result-box" style="display: none; padding: 9px 12px; border-radius: var(--radius-sm); font-size: 11px; line-height: 1.5; background: rgba(0,0,0,0.5); border: 1px solid rgba(139,92,246,0.4);"></div>
           </div>
         </div>
 
@@ -2103,6 +2163,11 @@
               • ⚡ <b>Lowest-Latency:</b> Luôn tự động chọn Proxy có thời gian phản hồi Ping thấp nhất.<br>
               • 🛡️ <b>Failover-Only:</b> Ưu tiên sử dụng Cloudflare WARP, chỉ tự động kích hoạt Proxy dự phòng khi phát hiện mạng lỗi.<br>
               • 🎲 <b>Random:</b> Chọn ngẫu nhiên một Proxy cho mỗi bài hát được tải.
+            </div>
+            <div style="background: var(--bg-card); border-left: 3px solid var(--accent-yellow); padding: 10px 14px; border-radius: var(--radius-sm);">
+              <b>4. 🎭 Bảng Điều Khiển Hồ Sơ Dấu Vân Tay (Fingerprint Studio v4.0):</b><br>
+              • Dựa trên kiến trúc của <code>browser-forge</code>, <code>curl_cffi</code>, và <code>playwright-stealth</code>: Tự động đồng bộ hóa tương quan 100% giữa <b>User-Agent</b>, <b>Sec-CH-UA Client Hints</b>, <b>WebGL GPU context (NVIDIA RTX / Apple M3 / AMD RX)</b>, <b>Độ phân giải màn hình &amp; DPI</b>, <b>Phần cứng CPU/RAM</b>, <b>Chữ ký TLS JA4</b>, và <b>YouTube InnerTube Player Client</b>.<br>
+              • Vào <b>⚙️ Cài Đặt ➡️ Tab 🌐 Ẩn IP &amp; WARP Shield ➡️ Mục 🎭 Browser Fingerprint Studio</b> để chuyển đổi giữa 8 hồ sơ mẫu (Windows 11 Chrome/Edge/Firefox, macOS Safari/Chrome, iPhone 16 Pro Max, Samsung Galaxy S24, Smart TV Tizen) hoặc bấm <b>⚡ Audit Dấu Vân Tay</b> để kiểm tra 7 điểm vượt bot!
             </div>
           </div>
         </div>
