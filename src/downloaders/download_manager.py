@@ -512,53 +512,88 @@ class DownloadManager:
         except Exception as e:
             return False, None, str(e)
 
-    def _download_ytdlp(
+    def _download_via_ytdlp(
         self,
         target_url_or_query: str,
         output_dir: Path,
         proxy: Optional[str] = None,
     ) -> Tuple[bool, Optional[Path], Optional[str]]:
-        """Download track directly from YouTube/YTMusic using yt-dlp in-process at 320kbps."""
+        """Download track directly from YouTube/YTMusic using yt-dlp in-process at 320kbps with auto-fallback."""
         out_template = str(output_dir / "audio.%(ext)s")
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": out_template,
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "320",
-                }
-            ],
-            "extractor_args": FingerprintGenerator.get_ytdlp_extractor_args(),
-            "http_headers": FingerprintGenerator.get_ytdlp_http_headers(),
-            "quiet": True,
-            "no_warnings": True,
-            "noplaylist": True,
-            "socket_timeout": 30,
-        }
-
-        # If it's not a direct URL, search YouTube
-        if not target_url_or_query.startswith("http://") and not target_url_or_query.startswith("https://"):
-            ydl_opts["default_search"] = "ytsearch1"
-
         active_cookie = self._get_active_cookie_file()
-        if active_cookie:
-            ydl_opts["cookiefile"] = active_cookie
 
-        if proxy:
-            ydl_opts["proxy"] = proxy
+        # Build fallback proxy sequence
+        proxy_candidates = [proxy]
+        if self.proxy_manager.enabled:
+            alt_proxy = self.proxy_manager.get_proxy()
+            if alt_proxy and alt_proxy not in proxy_candidates:
+                proxy_candidates.append(alt_proxy)
+            # Add WARP fallback if not already primary
+            warp_proxy = "socks5://127.0.0.1:40000"
+            if warp_proxy not in proxy_candidates:
+                proxy_candidates.append(warp_proxy)
+        # Direct attempt as last resort
+        if None not in proxy_candidates:
+            proxy_candidates.append(None)
 
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([target_url_or_query])
+        last_error = None
+        for attempt_idx, current_proxy in enumerate(proxy_candidates[:3]):
+            ydl_opts = {
+                "format": "bestaudio/best",
+                "outtmpl": out_template,
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "320",
+                    }
+                ],
+                "extractor_args": FingerprintGenerator.get_ytdlp_extractor_args(),
+                "http_headers": FingerprintGenerator.get_ytdlp_http_headers(),
+                "quiet": True,
+                "no_warnings": True,
+                "noplaylist": True,
+                "socket_timeout": 30,
+            }
 
-            mp3_files = list(output_dir.glob("*.mp3"))
-            if mp3_files:
-                return True, mp3_files[0], None
-            return False, None, "yt-dlp completed but output file not found."
-        except Exception as e:
-            return False, None, str(e)
+            if not target_url_or_query.startswith("http://") and not target_url_or_query.startswith("https://"):
+                ydl_opts["default_search"] = "ytsearch1"
+
+            if active_cookie:
+                ydl_opts["cookiefile"] = active_cookie
+
+            if current_proxy:
+                ydl_opts["proxy"] = current_proxy
+
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([target_url_or_query])
+
+                mp3_files = list(output_dir.glob("*.mp3"))
+                if mp3_files:
+                    return True, mp3_files[0], None
+            except Exception as e:
+                err_str = str(e)
+                last_error = err_str
+                if current_proxy:
+                    self.proxy_manager.report_failure(current_proxy)
+
+                # Check if network lost completely
+                if any(kw in err_str.lower() for kw in ["connection refused", "name resolution", "network is unreachable"]):
+                    self.db.log_activity(
+                        username="system",
+                        action="NETWORK_ERROR",
+                        status="FAILED",
+                        details=f"Mất kết nối mạng khi tải '{target_url_or_query[:35]}': {err_str}",
+                    )
+
+                # Auto rotate fingerprint on bot error
+                if "sign in to confirm" in err_str.lower() or "bot" in err_str.lower():
+                    FingerprintGenerator.set_active_profile("random")
+
+                time.sleep(1)
+
+        return False, None, last_error or "yt-dlp failed on all fallback attempts."
 
     def _cleanup_temp(self, temp_dir: Path):
         """Remove temporary directory."""

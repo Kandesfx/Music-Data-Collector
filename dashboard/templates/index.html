@@ -1431,6 +1431,9 @@
                 <span>🎭</span> BẢNG ĐIỀU KHIỂN HỒ SƠ GIẢ LẬP DẤU VÂN TAY (BROWSER FINGERPRINT STUDIO v4.0)
               </div>
               <div style="display: flex; gap: 6px;">
+                <button id="btn-add-custom-fp" class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px; border-color: rgba(139,92,246,0.6); color: #c084fc;" onclick="window.openAddFingerprintModal()">
+                  ➕ Thêm Hồ Sơ Mới
+                </button>
                 <button id="btn-random-fp" class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px; border-color: rgba(139,92,246,0.5); color: #c084fc;" onclick="window.randomizeFingerprint()">
                   🎲 Đổi Ngẫu Nhiên
                 </button>
@@ -1441,12 +1444,15 @@
             </div>
 
             <div style="font-size: 11px; color: var(--text-dim); line-height: 1.5;">
-              Hệ thống mô phỏng môi trường người dùng thật 100% dựa trên công nghệ của <b>browser-forge</b>, <b>curl_cffi</b>, và <b>playwright-stealth</b>: Tự động đồng bộ hóa tương quan giữa <b>User-Agent</b>, <b>Sec-CH-UA Client Hints</b>, <b>WebGL GPU context</b>, <b>Độ phân giải màn hình</b>, và <b>Chữ ký TLS JA4</b> để vượt qua mọi cơ chế kiểm tra bot của Google, YouTube và Cloudflare.
+              Hệ thống mô phỏng môi trường người dùng thật 100% dựa trên công nghệ của <b>browser-forge</b>, <b>curl_cffi</b>, và <b>playwright-stealth</b>: Tự động kiểm thử (Pre-flight test) trước khi kích hoạt, đồng bộ hóa tương quan giữa <b>User-Agent</b>, <b>Sec-CH-UA Client Hints</b>, <b>WebGL GPU context</b>, <b>Độ phân giải màn hình</b>, và <b>Chữ ký TLS JA4</b> để vượt qua mọi cơ chế kiểm tra bot của Google, YouTube và Cloudflare.
             </div>
 
-            <!-- Profile Selector -->
+            <!-- Profile Selector & Pre-flight Action -->
             <div class="form-group" style="margin-bottom: 4px;">
-              <label class="form-label" style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Chọn Hồ Sơ Trình Duyệt / Thiết Bị Hoạt Động:</label>
+              <div class="flex-between" style="margin-bottom: 4px;">
+                <label class="form-label" style="font-size: 11px; color: var(--text-muted); font-weight: 600; margin-bottom: 0;">Chọn Hồ Sơ Trình Duyệt / Thiết Bị Hoạt Động:</label>
+                <span id="fp-preflight-badge" class="badge badge-success" style="font-size: 10px;">🟢 ĐÃ KIỂM THỬ (PRE-FLIGHT PASSED)</span>
+              </div>
               <div style="display: flex; gap: 8px;">
                 <select id="fp-profile-select" class="input-field" style="font-size: 11.5px; font-weight: 600; color: #c084fc; background: rgba(0,0,0,0.5); border-color: rgba(139,92,246,0.4);" onchange="window.switchFingerprint(this.value)">
                   <option value="win11_chrome_132_nv">🖥️ Chrome 132 — Windows 11 x64 (NVIDIA RTX 4070) [Mặc định]</option>
@@ -1459,8 +1465,8 @@
                   <option value="smart_tv_tizen_youtube">📺 Smart TV Samsung Cobalt (YouTube on TV Client)</option>
                   <option value="random">🎲 Tự Động Chọn Ngẫu Nhiên Mỗi Phiên (Auto Rotate)</option>
                 </select>
-                <button class="btn btn-primary" style="font-size: 11px; padding: 4px 12px; white-space: nowrap;" onclick="window.applySelectedFingerprint()">
-                  💾 Áp Dụng
+                <button id="btn-apply-fp" class="btn btn-primary" style="font-size: 11px; padding: 4px 12px; white-space: nowrap;" onclick="window.applySelectedFingerprint()">
+                  ⚡ Test &amp; Kích Hoạt
                 </button>
               </div>
             </div>
@@ -1490,6 +1496,17 @@
               <div style="background: rgba(0,0,0,0.4); border: 1px solid rgba(139,92,246,0.25); border-radius: var(--radius-sm); padding: 7px 9px;">
                 <div style="color: var(--text-muted); font-size: 9.5px; text-transform: uppercase;">🔒 Chữ Ký TLS JA4 & Client</div>
                 <div id="fp-spec-ja4" style="color: #f472b6; font-weight: 600; margin-top: 3px; word-break: break-all;">t13d1516h2_8daaf6152771 (WEB_REMIX)</div>
+              </div>
+            </div>
+
+            <!-- Custom Profiles Manager Table -->
+            <div style="margin-top: 4px;">
+              <div style="font-size: 11px; font-weight: 700; color: var(--accent-purple); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                <span>📋 Danh Sách Hồ Sơ Trong Pool &amp; Trạng Thái Pre-flight</span>
+                <span id="fp-total-count" class="badge badge-secondary" style="font-size: 9.5px;">8 Profiles</span>
+              </div>
+              <div id="fp-profiles-list-table" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; padding-right: 4px;">
+                <!-- Populated dynamically via JS -->
               </div>
             </div>
 
@@ -2611,6 +2628,93 @@
         <div class="modal-footer flex-row" style="justify-content: flex-end; gap: 8px; margin-top: 10px;">
           <button type="button" id="btn-cancel-add-track" class="btn btn-secondary">Hủy Bỏ</button>
           <button type="submit" id="btn-save-new-track" class="btn btn-primary">💾 Lưu Bài Hát Vào DB</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 12: Custom Fingerprint Profile Creator -->
+  <div id="modal-add-fingerprint" class="modal-overlay" style="display: none;">
+    <div class="modal-card" style="max-width: 640px;">
+      <div class="modal-header flex-between">
+        <h3 style="font-size: 15px; font-weight: 700; color: var(--accent-purple); display: flex; align-items: center; gap: 8px;">
+          <span>🎭</span> Tạo &amp; Thêm Hồ Sơ Giả Lập Trình Duyệt Tùy Chỉnh
+        </h3>
+        <button class="modal-close-btn" onclick="window.closeAddFingerprintModal()">&times;</button>
+      </div>
+
+      <form id="form-add-fingerprint" class="flex-col" style="gap: 12px; margin-top: 10px;" onsubmit="event.preventDefault(); window.saveCustomFingerprint();">
+        <div style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.3); padding: 10px 12px; border-radius: var(--radius-sm); font-size: 11.5px; line-height: 1.5;">
+          💡 <b>Cơ Chế Kiểm Thử Tự Động (Pre-flight Test):</b> Khi bạn nhấn Lưu, hệ thống sẽ tự động gửi gói tin thử nghiệm để đo độ trễ, kiểm tra tương quan Client Hints và đánh giá khả năng vượt bot trước khi chính thức đưa vào danh sách sử dụng!
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Tên Hồ Sơ (Profile Name): <span class="text-danger">*</span></label>
+          <input type="text" id="add-fp-name" class="input-field" placeholder="Ví dụ: Chrome 133 on macOS Sonoma (Apple M3 Pro)" required>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Hệ Điều Hành (OS):</label>
+            <select id="add-fp-os" class="input-field" onchange="window.autoFillFingerprintHints()">
+              <option value="Windows">Windows (Desktop)</option>
+              <option value="macOS">macOS (Apple Mac)</option>
+              <option value="Linux">Linux (Ubuntu / Fedora)</option>
+              <option value="iOS">iOS (iPhone / iPad)</option>
+              <option value="Android">Android (Mobile)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Trình Duyệt (Browser):</label>
+            <select id="add-fp-browser" class="input-field" onchange="window.autoFillFingerprintHints()">
+              <option value="Chrome">Google Chrome</option>
+              <option value="Edge">Microsoft Edge</option>
+              <option value="Safari">Apple Safari</option>
+              <option value="Firefox">Mozilla Firefox</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Chuỗi User-Agent: <span class="text-danger">*</span></label>
+          <textarea id="add-fp-ua" class="input-field font-mono" rows="2" style="font-size: 11px;" placeholder="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36" required></textarea>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Card Đồ Họa (WebGL GPU Renderer):</label>
+            <input type="text" id="add-fp-gpu" class="input-field font-mono" style="font-size: 11px;" value="ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Độ Phân Giải Màn Hình &amp; Tỷ Lệ DPI:</label>
+            <input type="text" id="add-fp-screen" class="input-field font-mono" style="font-size: 11px;" value="1920x1080@1.0">
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Số Nhân CPU &amp; RAM (GB):</label>
+            <input type="text" id="add-fp-hw" class="input-field font-mono" style="font-size: 11px;" value="16 cores, 16 GB">
+          </div>
+          <div class="form-group">
+            <label class="form-label">InnerTube Player Client:</label>
+            <select id="add-fp-client" class="input-field">
+              <option value="WEB_REMIX">WEB_REMIX (YouTube Music Desktop)</option>
+              <option value="WEB">WEB (YouTube Web Standard)</option>
+              <option value="ANDROID_MUSIC">ANDROID_MUSIC (YouTube Music Android)</option>
+              <option value="IOS_MUSIC">IOS_MUSIC (YouTube Music iOS)</option>
+              <option value="TVHTML5_SIMPLY_EMBEDDED_PLAYER">TV (YouTube on Smart TV)</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="add-fp-test-status" style="display: none; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 11px;"></div>
+
+        <div class="modal-footer flex-row" style="justify-content: flex-end; gap: 8px; margin-top: 8px;">
+          <button type="button" class="btn btn-secondary" onclick="window.closeAddFingerprintModal()">Hủy Bỏ</button>
+          <button type="submit" id="btn-save-custom-fp" class="btn btn-primary" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">
+            ⚡ Test Tự Động &amp; Thêm Vào Danh Sách
+          </button>
         </div>
       </form>
     </div>

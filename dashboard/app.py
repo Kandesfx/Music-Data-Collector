@@ -75,6 +75,7 @@ class PipelineController:
             proxy_manager=self.pm,
             on_cookie_expired=self.handle_cookie_expired,
         )
+        FingerprintGenerator.set_db_manager(self.db)
 
         self.is_running = False
         self.is_paused = False
@@ -1273,51 +1274,219 @@ def api_disconnect_tailscale():
     return jsonify({"success": ok, **TailscaleController.get_status()})
 
 
-@app.route("/api/network/fingerprint/status", methods=["GET"])
-def api_get_fingerprint_status():
-    """Get active browser fingerprint and full list of presets."""
+@app.route("/api/network/fingerprints", methods=["GET"])
+def api_get_fingerprints():
+    """Retrieve all preset and custom fingerprint profiles from database."""
+    profiles = controller.db.get_all_fingerprints()
+    if not profiles:
+        FingerprintGenerator.sync_with_db()
+        profiles = controller.db.get_all_fingerprints()
+    active_fp = FingerprintGenerator.get_active_profile()
     return jsonify({
         "success": True,
-        "active_profile": FingerprintGenerator.get_active_profile(),
-        "profiles": FingerprintGenerator.get_all_profiles(),
-        "stealth_script": FingerprintGenerator.get_dom_stealth_script(),
+        "profiles": profiles,
+        "active_profile": active_fp,
+        "total": len(profiles),
     })
 
 
-@app.route("/api/network/fingerprint/switch", methods=["POST"])
-def api_switch_fingerprint():
-    """Switch active browser profile preset or set to random."""
+@app.route("/api/network/fingerprints", methods=["POST"])
+def api_save_custom_fingerprint():
+    """Add or update a custom fingerprint profile in MongoDB with automated pre-flight testing."""
     body = request.get_json() or {}
-    profile_id = body.get("profile_id", "random")
+    operator = session.get("user", {}).get("username", "admin")
+    name = body.get("name", "").strip()
+    user_agent = body.get("user_agent", "").strip()
+    os_name = body.get("os", "Windows").strip()
+
+    if not name or not user_agent:
+        return jsonify({"success": False, "error": "Tên hồ sơ và chuỗi User-Agent không được để trống!"}), 400
+
+    body["added_by"] = operator
+    body["is_custom"] = True
+
+    # Run automated pre-flight test before adding to database
+    preflight = FingerprintGenerator.preflight_test(profile=body)
+    body["status"] = preflight.get("status", "untested")
+    body["preflight_passed"] = preflight.get("passed", False)
+    body["last_latency_ms"] = preflight.get("latency_ms", 0)
+
+    ok = controller.db.upsert_fingerprint(body)
+    if ok:
+        FingerprintGenerator.sync_with_db()
+        controller.db.log_activity(
+            username=operator,
+            action="CREATE_FINGERPRINT_PROFILE",
+            status="SUCCESS" if preflight.get("passed") else "WARNING",
+            details=f"Tạo hồ sơ giả lập '{name}' (Pre-flight: {preflight.get('status')}, Ping: {preflight.get('latency_ms')}ms)",
+            target=body.get("id"),
+        )
+        return jsonify({
+            "success": True,
+            "preflight": preflight,
+            "message": f"Đã lưu hồ sơ '{name}' thành công! (Pre-flight: {preflight.get('status')})"
+        })
+    return jsonify({"success": False, "error": "Không thể lưu hồ sơ giả lập"}), 500
+
+
+@app.route("/api/network/fingerprints/<profile_id>", methods=["DELETE"])
+def api_delete_fingerprint(profile_id):
+    """Delete a custom fingerprint profile."""
+    operator = session.get("user", {}).get("username", "admin")
+    profile = controller.db.get_fingerprint(profile_id)
+    if not profile:
+        return jsonify({"success": False, "error": "Hồ sơ không tồn tại"}), 404
+
+    if not profile.get("is_custom", True):
+        return jsonify({"success": False, "error": "Không thể xóa hồ sơ mặc định của hệ thống!"}), 400
+
+    ok = controller.db.delete_fingerprint(profile_id)
+    if ok:
+        FingerprintGenerator.sync_with_db()
+        controller.db.log_activity(
+            username=operator,
+            action="DELETE_FINGERPRINT_PROFILE",
+            status="SUCCESS",
+            details=f"Xóa hồ sơ giả lập '{profile.get('name')}'",
+            target=profile_id,
+        )
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Không thể xóa hồ sơ"}), 500
+
+
+@app.route("/api/network/fingerprints/<profile_id>/preflight_test", methods=["POST"])
+def api_preflight_test_fingerprint(profile_id):
+    """Perform automated pre-flight test for a specific profile."""
+    profile = controller.db.get_fingerprint(profile_id)
+    if not profile:
+        for p in FingerprintGenerator.PROFILES:
+            if p["id"] == profile_id:
+                profile = p
+                break
+
+    if not profile:
+        return jsonify({"success": False, "error": "Hồ sơ không tồn tại"}), 404
+
+    active_proxy = controller.pm.get_proxy() if controller.pm.enabled else None
+    result = FingerprintGenerator.preflight_test(profile=profile, proxy_url=active_proxy)
+    return jsonify({"success": True, **result})
+
+
+@app.route("/api/network/fingerprints/<profile_id>/activate", methods=["POST"])
+def api_activate_fingerprint(profile_id):
+    """Auto-test and activate a fingerprint profile if healthy."""
+    operator = session.get("user", {}).get("username", "admin")
+    profile = controller.db.get_fingerprint(profile_id)
+    if not profile:
+        for p in FingerprintGenerator.PROFILES:
+            if p["id"] == profile_id:
+                profile = p
+                break
+
+    if not profile:
+        return jsonify({"success": False, "error": "Hồ sơ không tồn tại"}), 404
+
+    active_proxy = controller.pm.get_proxy() if controller.pm.enabled else None
+    preflight = FingerprintGenerator.preflight_test(profile=profile, proxy_url=active_proxy)
+
+    if not preflight.get("passed"):
+        return jsonify({
+            "success": False,
+            "error": f"Kiểm tra Pre-flight thất bại ({preflight.get('error') or 'Lỗi kết nối'}). Không thể kích hoạt hồ sơ này!",
+            "preflight": preflight,
+        }), 400
+
     ok = FingerprintGenerator.set_active_profile(profile_id)
-    active = FingerprintGenerator.get_active_profile()
-    controller.log(f"🎭 Switched Browser Fingerprint Profile: {active['name']}", level="info")
-    return jsonify({
-        "success": ok,
-        "active_profile": active,
-        "message": f"Đã áp dụng hồ sơ giả lập: {active['name']}"
-    })
+    if ok:
+        active = FingerprintGenerator.get_active_profile()
+        controller.db.log_activity(
+            username=operator,
+            action="ACTIVATE_FINGERPRINT",
+            status="SUCCESS",
+            details=f"Kích hoạt hồ sơ giả lập '{active.get('name')}' (Pre-flight passed)",
+            target=profile_id,
+        )
+        return jsonify({
+            "success": True,
+            "active_profile": active,
+            "preflight": preflight,
+            "message": f"Đã kiểm thử đạt chuẩn và kích hoạt hồ sơ '{active.get('name')}'!"
+        })
+    return jsonify({"success": False, "error": "Không thể kích hoạt hồ sơ"}), 500
 
 
-@app.route("/api/network/fingerprint/test", methods=["POST"])
-def api_test_fingerprint():
-    """Perform live fingerprint audit check."""
-    active = FingerprintGenerator.get_active_profile()
-    headers = FingerprintGenerator.get_http_headers()
-    return jsonify({
-        "success": True,
-        "profile": active,
-        "headers": headers,
-        "stealth_checks": {
-            "navigator_webdriver": "undefined (Passed)",
-            "client_hints_consistent": "100% Correlated with User-Agent (Passed)",
-            "webgl_gpu_vendor": f"{active.get('webgl', {}).get('unmasked_vendor')} (Real Hardware)",
-            "webgl_gpu_renderer": f"{active.get('webgl', {}).get('unmasked_renderer')} (Realistic)",
-            "screen_resolution": f"{active.get('screen', {}).get('width')}x{active.get('screen', {}).get('height')} @ {active.get('screen', {}).get('devicePixelRatio')}x (Passed)",
-            "ja4_tls_signature": f"{active.get('ja4_tls')} (Verified Modern Browser)",
-            "innertube_client": f"{active.get('innertube_client', {}).get('client_name')} (Native Client)"
-        }
-    })
+@app.route("/api/network/health_watchdog", methods=["GET"])
+def api_get_network_health_watchdog():
+    """
+    Live real-time connectivity watchdog checking:
+    1. Oracle host outbound connection
+    2. Cloudflare WARP SOCKS5 Gateway
+    3. Tailscale Mesh Tunnel & Exit Node
+    4. Active Proxy Pool latency
+    5. Upstream YouTube/Spotify API status
+    Detects and reports connection drops immediately.
+    """
+    import socket
+    import requests
+
+    watchdog_report = {
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        "is_healthy": True,
+        "alerts": [],
+        "services": {},
+    }
+
+    # 1. Probe Host Internet Outbound
+    try:
+        r_out = requests.get("https://1.1.1.1", timeout=3)
+        watchdog_report["services"]["internet"] = {"status": "online", "latency_ms": int(r_out.elapsed.total_seconds() * 1000)}
+    except Exception as e:
+        watchdog_report["is_healthy"] = False
+        watchdog_report["alerts"].append(f"Mất kết nối Internet chính máy chủ: {e}")
+        watchdog_report["services"]["internet"] = {"status": "down", "error": str(e)}
+
+    # 2. Probe Cloudflare WARP
+    warp_status = WarpController.get_status()
+    if warp_status.get("is_connected"):
+        try:
+            r_warp = requests.get("https://httpbin.org/ip", proxies={"http": "socks5://127.0.0.1:40000", "https": "socks5://127.0.0.1:40000"}, timeout=4)
+            watchdog_report["services"]["warp"] = {"status": "online", "ip": r_warp.json().get("origin", "104.28.x.x")}
+        except Exception as e:
+            watchdog_report["alerts"].append(f"Cảnh báo: Cloudflare WARP Gateway 127.0.0.1:40000 không phản hồi: {e}")
+            watchdog_report["services"]["warp"] = {"status": "degraded", "error": str(e)}
+    else:
+        watchdog_report["services"]["warp"] = {"status": "disabled"}
+
+    # 3. Probe Active Proxy
+    if controller.pm.enabled and controller.pm.proxies:
+        active_prx = controller.pm.get_proxy()
+        if active_prx:
+            prx_res = ProxyManager.test_proxy_connection(active_prx, timeout=4)
+            if prx_res.get("status") != "alive":
+                watchdog_report["alerts"].append(f"Cảnh báo: Proxy đang dùng ({active_prx}) bị mất kết nối!")
+                watchdog_report["services"]["proxy"] = {"status": "down", "proxy": active_prx, "error": prx_res.get("error")}
+            else:
+                watchdog_report["services"]["proxy"] = {"status": "alive", "proxy": active_prx, "latency_ms": prx_res.get("latency_ms")}
+    else:
+        watchdog_report["services"]["proxy"] = {"status": "direct"}
+
+    # 4. Probe YouTube Music / Spotify Streaming API
+    try:
+        r_yt = requests.get("https://www.youtube.com/generate_204", timeout=4)
+        watchdog_report["services"]["youtube"] = {"status": "reachable", "code": r_yt.status_code}
+    except Exception as e:
+        watchdog_report["alerts"].append(f"Cảnh báo: Không thể kết nối tới YouTube CDN: {e}")
+        watchdog_report["services"]["youtube"] = {"status": "unreachable", "error": str(e)}
+
+    # If any alert exists, emit socket alert to dashboard
+    if watchdog_report["alerts"]:
+        socketio.emit("network_connection_lost", {
+            "alerts": watchdog_report["alerts"],
+            "timestamp": time.strftime("%H:%M:%S")
+        })
+
+    return jsonify({"success": True, **watchdog_report})
+
 
 
 @app.route("/api/stats")

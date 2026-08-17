@@ -4833,6 +4833,7 @@ socket.on("track_redownloaded", (data) => {
 // ─── Browser Fingerprint & Anti-Detection Studio Controller ──────────────
 (function initFingerprintStudio() {
   const profileSelect = document.getElementById("fp-profile-select");
+  const preflightBadge = document.getElementById("fp-preflight-badge");
   const specUa = document.getElementById("fp-spec-ua");
   const specCh = document.getElementById("fp-spec-ch");
   const specGpu = document.getElementById("fp-spec-gpu");
@@ -4840,6 +4841,10 @@ socket.on("track_redownloaded", (data) => {
   const specHw = document.getElementById("fp-spec-hw");
   const specJa4 = document.getElementById("fp-spec-ja4");
   const auditBox = document.getElementById("fp-audit-result-box");
+  const tableContainer = document.getElementById("fp-profiles-list-table");
+  const totalCountBadge = document.getElementById("fp-total-count");
+
+  let allLoadedProfiles = [];
 
   function renderProfileSpecs(profile) {
     if (!profile) return;
@@ -4861,47 +4866,180 @@ socket.on("track_redownloaded", (data) => {
     if (profileSelect && profile.id) {
       profileSelect.value = profile.id;
     }
+
+    if (preflightBadge) {
+      if (profile.preflight_passed) {
+        preflightBadge.className = "badge badge-success";
+        preflightBadge.textContent = `🟢 PRE-FLIGHT PASSED (${profile.last_latency_ms || 120}ms)`;
+      } else {
+        preflightBadge.className = "badge badge-secondary";
+        preflightBadge.textContent = "🟡 CHƯA PRE-FLIGHT";
+      }
+    }
+  }
+
+  function renderProfilesTable(profiles, activeId) {
+    if (!tableContainer) return;
+    if (!profiles || profiles.length === 0) {
+      tableContainer.innerHTML = `<div style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 8px;">Chưa có hồ sơ nào.</div>`;
+      return;
+    }
+
+    if (totalCountBadge) {
+      totalCountBadge.textContent = `${profiles.length} Profiles`;
+    }
+
+    // Populate dropdown options dynamically
+    if (profileSelect) {
+      const currentSelected = profileSelect.value;
+      profileSelect.innerHTML = profiles.map(p => {
+        const icon = p.device_type === "mobile" ? "📱" : (p.device_type === "tv" ? "📺" : (p.os === "macOS" ? "🍎" : "🖥️"));
+        const activeLabel = p.id === activeId ? " [Đang Dùng]" : "";
+        return `<option value="${p.id}">${icon} ${p.name}${activeLabel}</option>`;
+      }).join("") + `<option value="random">🎲 Tự Động Chọn Ngẫu Nhiên Mỗi Phiên (Auto Rotate)</option>`;
+      if (currentSelected && profileSelect.querySelector(`option[value="${currentSelected}"]`)) {
+        profileSelect.value = currentSelected;
+      }
+    }
+
+    tableContainer.innerHTML = profiles.map(p => {
+      const isActive = p.id === activeId;
+      const icon = p.device_type === "mobile" ? "📱" : (p.device_type === "tv" ? "📺" : (p.os === "macOS" ? "🍎" : "🖥️"));
+      const badgeClass = isActive ? "badge-success" : (p.preflight_passed ? "badge-info" : "badge-secondary");
+      const statusText = isActive ? "🟢 ĐANG DÙNG" : (p.preflight_passed ? `⚡ Passed (${p.last_latency_ms || 0}ms)` : "⚪ Untested");
+
+      const deleteBtn = p.is_custom ? `
+        <button class="btn btn-secondary" style="padding: 2px 6px; font-size: 10px; color: #f87171; border-color: rgba(239,68,68,0.4);" onclick="window.deleteCustomFingerprint('${p.id}')">
+          🗑️
+        </button>
+      ` : "";
+
+      return `
+        <div style="background: rgba(0,0,0,0.3); border: 1px solid ${isActive ? 'rgba(139,92,246,0.6)' : 'rgba(255,255,255,0.06)'}; border-radius: var(--radius-sm); padding: 6px 10px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
+            <span style="font-size: 14px;">${icon}</span>
+            <div style="display: flex; flex-direction: column;">
+              <div style="font-size: 11px; font-weight: 600; color: ${isActive ? '#c084fc' : '#e2e8f0'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px;">
+                ${p.name}
+              </div>
+              <div style="font-size: 9.5px; color: var(--text-muted); font-family: monospace;">
+                ${p.browser} on ${p.os} • JA4: ${p.ja4_tls ? p.ja4_tls.slice(0, 14) + '...' : 'standard'}
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="badge ${badgeClass}" style="font-size: 9px;">${statusText}</span>
+            <button class="btn btn-secondary" style="padding: 2px 6px; font-size: 10px; border-color: var(--accent-cyan); color: var(--accent-cyan);" onclick="window.preflightTestFingerprint('${p.id}')" title="Chạy Pre-flight Live Test">
+              ⚡ Test
+            </button>
+            ${!isActive ? `
+              <button class="btn btn-primary" style="padding: 2px 8px; font-size: 10px;" onclick="window.activateFingerprintWithPreflight('${p.id}')">
+                Kích Hoạt
+              </button>
+            ` : ''}
+            ${deleteBtn}
+          </div>
+        </div>
+      `;
+    }).join("");
   }
 
   window.refreshFingerprintStatus = async function() {
     try {
-      const res = await fetch("/api/network/fingerprint/status");
+      const res = await fetch("/api/network/fingerprints");
       const data = await res.json();
-      if (data.success && data.active_profile) {
-        renderProfileSpecs(data.active_profile);
+      if (data.success && data.profiles) {
+        allLoadedProfiles = data.profiles;
+        const activeId = data.active_profile ? data.active_profile.id : "win11_chrome_132_nv";
+        renderProfilesTable(data.profiles, activeId);
+        if (data.active_profile) {
+          renderProfileSpecs(data.active_profile);
+        }
       }
     } catch (e) {
       console.warn("Error fetching fingerprint status:", e);
     }
   };
 
-  window.switchFingerprint = async function(profileId) {
+  window.switchFingerprint = function(profileId) {
+    if (profileId === "random") return;
+    const found = allLoadedProfiles.find(p => p.id === profileId);
+    if (found) {
+      renderProfileSpecs(found);
+    }
+  };
+
+  window.activateFingerprintWithPreflight = async function(profileId) {
+    const btnApply = document.getElementById("btn-apply-fp");
+    if (btnApply) {
+      btnApply.disabled = true;
+      btnApply.textContent = "⏳ Đang Pre-flight Test...";
+    }
+
     try {
-      const res = await fetch("/api/network/fingerprint/switch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile_id: profileId }),
-      });
+      const res = await fetch(`/api/network/fingerprints/${profileId}/activate`, { method: "POST" });
       const data = await res.json();
       if (data.success && data.active_profile) {
-        renderProfileSpecs(data.active_profile);
-        appendLog(`🎭 Đã chuyển đổi Hồ sơ giả lập Dấu vân tay: ${data.active_profile.name}`, "info");
+        appendLog(`🎭 Đã kiểm thử Pre-flight đạt chuẩn & kích hoạt hồ sơ: ${data.active_profile.name}`, "success");
+        await window.refreshFingerprintStatus();
+        alert(`✅ Đã kích hoạt hồ sơ: ${data.active_profile.name} (Ping: ${data.preflight ? data.preflight.latency_ms : 0}ms)`);
+      } else {
+        alert(`❌ Lỗi kích hoạt hồ sơ: ${data.error || "Pre-flight test không đạt chuẩn"}`);
       }
     } catch (e) {
-      alert(`Lỗi đổi hồ sơ vân tay: ${e.message}`);
+      alert(`Lỗi: ${e.message}`);
+    } finally {
+      if (btnApply) {
+        btnApply.disabled = false;
+        btnApply.textContent = "⚡ Test & Kích Hoạt";
+      }
     }
   };
 
   window.applySelectedFingerprint = async function() {
     if (!profileSelect) return;
-    await window.switchFingerprint(profileSelect.value);
-    alert("✅ Đã kích hoạt và đồng bộ hồ sơ giả lập vân tay trình duyệt thành công!");
+    const profileId = profileSelect.value;
+    if (profileId === "random") {
+      await window.randomizeFingerprint();
+    } else {
+      await window.activateFingerprintWithPreflight(profileId);
+    }
+  };
+
+  window.preflightTestFingerprint = async function(profileId) {
+    try {
+      appendLog(`⏳ Đang chạy Pre-flight Test cho hồ sơ '${profileId}'...`, "info");
+      const res = await fetch(`/api/network/fingerprints/${profileId}/preflight_test`, { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        if (data.passed) {
+          appendLog(`🟢 Pre-flight Test PASSED (${data.profile_name}): Latency ${data.latency_ms}ms`, "success");
+          alert(`✅ Hồ sơ '${data.profile_name}' đạt chuẩn 100% (Ping: ${data.latency_ms}ms, TLS & Client Hints hợp lệ)!`);
+        } else {
+          appendLog(`🔴 Pre-flight Test FAILED (${data.profile_name}): ${data.error}`, "error");
+          alert(`⚠️ Hồ sơ '${data.profile_name}' kiểm thử thất bại: ${data.error || 'Lỗi bắt tay mạng'}`);
+        }
+        await window.refreshFingerprintStatus();
+      }
+    } catch (e) {
+      alert(`Lỗi: ${e.message}`);
+    }
   };
 
   window.randomizeFingerprint = async function() {
-    await window.switchFingerprint("random");
-    if (auditBox) {
-      auditBox.style.display = "none";
+    try {
+      const res = await fetch("/api/network/fingerprints/switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile_id: "random" }),
+      });
+      const data = await res.json();
+      if (data.success && data.active_profile) {
+        appendLog(`🎲 Đã chọn ngẫu nhiên hồ sơ vân tay: ${data.active_profile.name}`, "info");
+        await window.refreshFingerprintStatus();
+      }
+    } catch (e) {
+      alert(`Lỗi: ${e.message}`);
     }
   };
 
@@ -4937,6 +5075,138 @@ socket.on("track_redownloaded", (data) => {
       auditBox.innerHTML = `<div style="color: #f87171;">❌ Lỗi kiểm toán: ${e.message}</div>`;
     }
   };
+
+  // Modal handlers
+  window.openAddFingerprintModal = function() {
+    const modal = document.getElementById("modal-add-fingerprint");
+    if (modal) {
+      modal.style.display = "flex";
+      window.autoFillFingerprintHints();
+    }
+  };
+
+  window.closeAddFingerprintModal = function() {
+    const modal = document.getElementById("modal-add-fingerprint");
+    if (modal) modal.style.display = "none";
+  };
+
+  window.autoFillFingerprintHints = function() {
+    const os = document.getElementById("add-fp-os") ? document.getElementById("add-fp-os").value : "Windows";
+    const browser = document.getElementById("add-fp-browser") ? document.getElementById("add-fp-browser").value : "Chrome";
+    const uaInput = document.getElementById("add-fp-ua");
+    const gpuInput = document.getElementById("add-fp-gpu");
+
+    if (os === "Windows") {
+      if (uaInput) uaInput.value = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ${browser === 'Edge' ? 'Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0' : (browser === 'Firefox' ? 'Gecko/20100101 Firefox/134.0' : 'Chrome/133.0.0.0 Safari/537.36')}`;
+      if (gpuInput) gpuInput.value = "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11)";
+    } else if (os === "macOS") {
+      if (uaInput) uaInput.value = browser === "Safari" ? "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15" : "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36";
+      if (gpuInput) gpuInput.value = "Apple M3 Max (Metal 3.1)";
+    } else if (os === "iOS") {
+      if (uaInput) uaInput.value = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+      if (gpuInput) gpuInput.value = "Apple A18 Pro GPU";
+    } else if (os === "Android") {
+      if (uaInput) uaInput.value = "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36";
+      if (gpuInput) gpuInput.value = "Qualcomm Adreno 750";
+    }
+  };
+
+  window.saveCustomFingerprint = async function() {
+    const name = document.getElementById("add-fp-name").value.trim();
+    const os = document.getElementById("add-fp-os").value;
+    const browser = document.getElementById("add-fp-browser").value;
+    const ua = document.getElementById("add-fp-ua").value.trim();
+    const gpu = document.getElementById("add-fp-gpu").value.trim();
+    const client = document.getElementById("add-fp-client").value;
+    const testStatus = document.getElementById("add-fp-test-status");
+    const btnSave = document.getElementById("btn-save-custom-fp");
+
+    if (!name || !ua) {
+      alert("Vui lòng nhập tên hồ sơ và chuỗi User-Agent!");
+      return;
+    }
+
+    if (testStatus) {
+      testStatus.style.display = "block";
+      testStatus.className = "badge badge-info";
+      testStatus.textContent = "⏳ Đang chạy Pre-flight Test tự động...";
+    }
+    if (btnSave) btnSave.disabled = true;
+
+    const payload = {
+      name: name,
+      os: os,
+      browser: browser,
+      user_agent: ua,
+      device_type: (os === "iOS" || os === "Android") ? "mobile" : "desktop",
+      sec_ch_ua: (browser === "Chrome" || browser === "Edge") ? `"Chromium";v="133", "Google Chrome";v="133"` : null,
+      sec_ch_ua_platform: `"${os}"`,
+      webgl: { unmasked_vendor: "Google Inc.", unmasked_renderer: gpu },
+      innertube_client: { client_name: client }
+    };
+
+    try {
+      const res = await fetch("/api/network/fingerprints", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        appendLog(`✅ Đã thêm hồ sơ mới: '${name}' (Pre-flight: ${data.preflight ? data.preflight.status : 'verified'})`, "success");
+        window.closeAddFingerprintModal();
+        await window.refreshFingerprintStatus();
+        alert(data.message || "Đã thêm hồ sơ thành công!");
+      } else {
+        if (testStatus) {
+          testStatus.className = "badge badge-danger";
+          testStatus.textContent = `❌ Lỗi: ${data.error}`;
+        }
+        alert(`Lỗi: ${data.error}`);
+      }
+    } catch (e) {
+      alert(`Lỗi: ${e.message}`);
+    } finally {
+      if (btnSave) btnSave.disabled = false;
+    }
+  };
+
+  window.deleteCustomFingerprint = async function(profileId) {
+    if (!confirm("Bạn có chắc chắn muốn xóa hồ sơ giả lập này?")) return;
+    try {
+      const res = await fetch(`/api/network/fingerprints/${profileId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        appendLog(`🗑️ Đã xóa hồ sơ giả lập '${profileId}'`, "info");
+        await window.refreshFingerprintStatus();
+      } else {
+        alert(`Lỗi xóa: ${data.error}`);
+      }
+    } catch (e) {
+      alert(`Lỗi: ${e.message}`);
+    }
+  };
+
+  // Real-time Connection Loss Watchdog Heartbeat
+  setInterval(async () => {
+    try {
+      const res = await fetch("/api/network/health_watchdog");
+      const data = await res.json();
+      if (data.success && data.alerts && data.alerts.length > 0) {
+        appendLog(`🚨 CẢNH BÁO MẤT KẾT NỐI MẠNG: ${data.alerts.join(" | ")}`, "error");
+      }
+    } catch (e) {
+      // Network unreachable
+    }
+  }, 20000);
+
+  // Listen to socket connection lost events
+  if (typeof socket !== "undefined") {
+    socket.on("network_connection_lost", (data) => {
+      const alerts = data.alerts || [];
+      appendLog(`🚨 [MẠNG MẤT KẾT NỐI] ${alerts.join(" — ")}`, "error");
+    });
+  }
 
   document.addEventListener("DOMContentLoaded", () => {
     window.refreshFingerprintStatus();

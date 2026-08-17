@@ -1547,5 +1547,127 @@ class DBManager:
                     "message": "Đã đồng bộ tự động từ file cookies.txt hệ thống.",
                 })
 
+    # ─── Fingerprint Profile Pool Management ────────────────────
+
+    def get_all_fingerprints(self) -> List[Dict[str, Any]]:
+        """Retrieve all preset and custom fingerprint profiles from MongoDB."""
+        if not self.is_connected():
+            return []
+        return list(self.db.fingerprint_profiles.find({}, {"_id": 0}).sort("created_at", 1))
+
+    def get_fingerprint(self, profile_id: str) -> Optional[Dict[str, Any]]:
+        """Get a single fingerprint profile by ID."""
+        if not self.is_connected():
+            return None
+        return self.db.fingerprint_profiles.find_one({"id": profile_id}, {"_id": 0})
+
+    def get_active_fingerprint(self) -> Optional[Dict[str, Any]]:
+        """Get currently active fingerprint profile."""
+        if not self.is_connected():
+            return None
+        return self.db.fingerprint_profiles.find_one({"is_active": True}, {"_id": 0})
+
+    def upsert_fingerprint(self, profile_data: Dict[str, Any]) -> bool:
+        """Create or update a fingerprint profile in MongoDB."""
+        if not self.is_connected():
+            return False
+
+        profile_id = profile_data.get("id") or f"fp_{int(time.time()*1000)}"
+        is_active = bool(profile_data.get("is_active", False))
+
+        if is_active:
+            self.db.fingerprint_profiles.update_many({}, {"$set": {"is_active": False}})
+
+        doc = {
+            "id": profile_id,
+            "name": profile_data.get("name", "Custom Browser Profile"),
+            "device_type": profile_data.get("device_type", "desktop"),
+            "os": profile_data.get("os", "Windows"),
+            "os_version": profile_data.get("os_version", "10.0"),
+            "browser": profile_data.get("browser", "Chrome"),
+            "browser_version": profile_data.get("browser_version", "132.0.0.0"),
+            "user_agent": profile_data.get("user_agent", ""),
+            "sec_ch_ua": profile_data.get("sec_ch_ua"),
+            "sec_ch_ua_full_version_list": profile_data.get("sec_ch_ua_full_version_list"),
+            "sec_ch_ua_platform": profile_data.get("sec_ch_ua_platform"),
+            "sec_ch_ua_platform_version": profile_data.get("sec_ch_ua_platform_version"),
+            "sec_ch_ua_mobile": profile_data.get("sec_ch_ua_mobile", "?0"),
+            "sec_ch_ua_arch": profile_data.get("sec_ch_ua_arch"),
+            "sec_ch_ua_bitness": profile_data.get("sec_ch_ua_bitness", '"64"'),
+            "sec_ch_ua_model": profile_data.get("sec_ch_ua_model", '""'),
+            "screen": profile_data.get("screen", {
+                "width": 1920, "height": 1080, "availWidth": 1920, "availHeight": 1040,
+                "colorDepth": 24, "pixelDepth": 24, "devicePixelRatio": 1.0
+            }),
+            "webgl": profile_data.get("webgl", {
+                "unmasked_vendor": "Google Inc. (NVIDIA)",
+                "unmasked_renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+                "gl_version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+                "shading_language_version": "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)"
+            }),
+            "hardware": profile_data.get("hardware", {
+                "hardware_concurrency": 8, "device_memory": 16, "max_touch_points": 0
+            }),
+            "ja4_tls": profile_data.get("ja4_tls", "t13d1516h2_8daaf6152771_016e788ee515"),
+            "innertube_client": profile_data.get("innertube_client", {
+                "client_name": "WEB_REMIX", "client_version": "1.20250120.01.00", "os_name": "Windows", "os_version": "10.0"
+            }),
+            "is_custom": bool(profile_data.get("is_custom", False)),
+            "is_active": is_active,
+            "status": profile_data.get("status", "untested"),
+            "preflight_passed": bool(profile_data.get("preflight_passed", False)),
+            "last_latency_ms": profile_data.get("last_latency_ms", 0),
+            "last_tested": profile_data.get("last_tested", None),
+            "added_by": profile_data.get("added_by", "admin"),
+            "created_at": profile_data.get("created_at") or datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+
+        self.db.fingerprint_profiles.update_one({"id": profile_id}, {"$set": doc}, upsert=True)
+        return True
+
+    def delete_fingerprint(self, profile_id: str) -> bool:
+        """Delete custom fingerprint profile from MongoDB."""
+        if not self.is_connected():
+            return False
+        # Do not allow deleting system default profiles if marked is_custom == False
+        res = self.db.fingerprint_profiles.delete_one({"id": profile_id})
+        return res.deleted_count > 0
+
+    def set_active_fingerprint(self, profile_id: str) -> bool:
+        """Set a fingerprint profile as active."""
+        if not self.is_connected():
+            return False
+        self.db.fingerprint_profiles.update_many({}, {"$set": {"is_active": False}})
+        res = self.db.fingerprint_profiles.update_one(
+            {"id": profile_id},
+            {"$set": {"is_active": True, "updated_at": datetime.utcnow()}}
+        )
+        return res.modified_count > 0
+
+    def update_fingerprint_test_result(
+        self,
+        profile_id: str,
+        status: str,
+        preflight_passed: bool,
+        latency_ms: int = 0,
+        details: Optional[str] = None
+    ) -> bool:
+        """Update pre-flight test results for fingerprint."""
+        if not self.is_connected():
+            return False
+        update_fields: Dict[str, Any] = {
+            "status": status,
+            "preflight_passed": preflight_passed,
+            "last_latency_ms": latency_ms,
+            "last_tested": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "updated_at": datetime.utcnow(),
+        }
+        if details:
+            update_fields["test_details"] = details
+        res = self.db.fingerprint_profiles.update_one({"id": profile_id}, {"$set": update_fields})
+        return res.modified_count > 0
+
+
 
 

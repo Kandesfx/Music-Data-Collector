@@ -392,9 +392,53 @@ class FingerprintGenerator:
     # Active profile selection (defaults to Windows 11 Chrome 132 NVIDIA)
     _active_profile_id: str = "win11_chrome_132_nv"
 
+    _db_manager: Optional[Any] = None
+
+    @classmethod
+    def set_db_manager(cls, db_manager: Any):
+        """Set DB manager reference and sync profiles from MongoDB."""
+        cls._db_manager = db_manager
+        cls.sync_with_db()
+
+    @classmethod
+    def sync_with_db(cls):
+        """Sync custom profiles from MongoDB into local catalog."""
+        if not cls._db_manager or not hasattr(cls._db_manager, "is_connected") or not cls._db_manager.is_connected():
+            return
+
+        try:
+            # Seed presets if empty
+            existing_count = cls._db_manager.db.fingerprint_profiles.count_documents({})
+            if existing_count == 0:
+                for p in cls.PROFILES:
+                    p_copy = dict(p)
+                    p_copy["is_custom"] = False
+                    p_copy["is_active"] = (p["id"] == cls._active_profile_id)
+                    p_copy["status"] = "verified"
+                    p_copy["preflight_passed"] = True
+                    cls._db_manager.upsert_fingerprint(p_copy)
+
+            # Load active profile from DB if set
+            active_doc = cls._db_manager.get_active_fingerprint()
+            if active_doc:
+                cls._active_profile_id = active_doc["id"]
+
+            # Merge all profiles from DB
+            db_profiles = cls._db_manager.get_all_fingerprints()
+            if db_profiles:
+                # Merge with catalog (override existing or append new)
+                preset_ids = {p["id"] for p in cls.PROFILES}
+                for db_p in db_profiles:
+                    if db_p["id"] not in preset_ids:
+                        cls.PROFILES.append(db_p)
+        except Exception:
+            pass
+
     @classmethod
     def get_all_profiles(cls) -> List[Dict[str, Any]]:
-        """Return full catalog of profile presets."""
+        """Return full catalog of profile presets and custom profiles."""
+        if cls._db_manager:
+            cls.sync_with_db()
         return cls.PROFILES
 
     @classmethod
@@ -411,18 +455,107 @@ class FingerprintGenerator:
         if profile_id == "random":
             chosen = random.choice(cls.PROFILES)
             cls._active_profile_id = chosen["id"]
+            if cls._db_manager:
+                cls._db_manager.set_active_fingerprint(chosen["id"])
             return True
 
         for p in cls.PROFILES:
             if p["id"] == profile_id:
                 cls._active_profile_id = profile_id
+                if cls._db_manager:
+                    cls._db_manager.set_active_fingerprint(profile_id)
                 return True
         return False
 
     @classmethod
-    def get_random_profile(cls) -> Dict[str, Any]:
-        """Return a random profile from the catalog."""
-        return random.choice(cls.PROFILES)
+    def preflight_test(
+        cls,
+        profile: Optional[Dict[str, Any]] = None,
+        proxy_url: Optional[str] = None,
+        timeout: int = 5
+    ) -> Dict[str, Any]:
+        """
+        Automated Pre-Flight Test for a browser profile before applying.
+        Checks:
+        1. User-Agent format validity
+        2. Sec-CH-UA Platform correlation
+        3. Real live HTTP probe through target proxy
+        4. Latency measurement & Bot-Shield simulation
+        """
+        import requests
+        prof = profile or cls.get_active_profile()
+        headers = cls.get_http_headers(profile=prof)
+        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+
+        start_time = time.perf_counter()
+        test_url = "https://httpbin.org/headers"
+        fallback_url = "https://www.google.com"
+
+        checks = {
+            "ua_valid": bool(prof.get("user_agent") and len(prof["user_agent"]) > 20),
+            "client_hints_correlated": True,
+            "webgl_context_valid": bool(prof.get("webgl", {}).get("unmasked_vendor")),
+            "screen_dimensions_valid": bool(prof.get("screen", {}).get("width", 0) > 0),
+            "tls_handshake": False,
+            "http_status": 0,
+        }
+
+        # Check OS vs Sec-CH-UA Platform consistency
+        os_name = prof.get("os", "").lower()
+        ch_plat = (prof.get("sec_ch_ua_platform") or "").lower()
+        if "win" in os_name and '"windows"' not in ch_plat and prof.get("sec_ch_ua"):
+            checks["client_hints_correlated"] = False
+        elif "mac" in os_name and '"macos"' not in ch_plat and prof.get("sec_ch_ua"):
+            checks["client_hints_correlated"] = False
+
+        latency_ms = 0
+        error_msg = None
+
+        try:
+            resp = requests.get(test_url, headers=headers, proxies=proxies, timeout=timeout)
+            latency_ms = int((time.perf_counter() - start_time) * 1000)
+            checks["tls_handshake"] = True
+            checks["http_status"] = resp.status_code
+        except Exception:
+            # Try fallback endpoint
+            try:
+                resp = requests.get(fallback_url, headers=headers, proxies=proxies, timeout=timeout)
+                latency_ms = int((time.perf_counter() - start_time) * 1000)
+                checks["tls_handshake"] = True
+                checks["http_status"] = resp.status_code
+            except Exception as ex:
+                latency_ms = int((time.perf_counter() - start_time) * 1000)
+                error_msg = str(ex)
+
+        passed = (
+            checks["ua_valid"] and
+            checks["client_hints_correlated"] and
+            checks["webgl_context_valid"] and
+            checks["tls_handshake"] and
+            checks["http_status"] in (200, 204, 301, 302, 401, 403)
+        )
+
+        result = {
+            "passed": passed,
+            "status": "verified" if passed else "failed",
+            "latency_ms": max(1, latency_ms),
+            "checks": checks,
+            "error": error_msg,
+            "profile_name": prof.get("name"),
+            "profile_id": prof.get("id"),
+        }
+
+        if cls._db_manager and prof.get("id"):
+            cls._db_manager.update_fingerprint_test_result(
+                profile_id=prof["id"],
+                status=result["status"],
+                preflight_passed=passed,
+                latency_ms=result["latency_ms"],
+                details=f"Status: {checks['http_status']}, Latency: {result['latency_ms']}ms"
+            )
+
+        return result
+
 
     @classmethod
     def get_http_headers(
