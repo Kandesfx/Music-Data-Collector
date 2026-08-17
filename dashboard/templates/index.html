@@ -165,7 +165,7 @@
               </div>
 
               <div class="card-body">
-                <div class="flex-row" style="flex-wrap: wrap;">
+                <div class="flex-row" style="flex-wrap: wrap; gap: 8px;">
                   <select id="crawl-mode" class="input-field" style="width: 170px;">
                     <option value="search" selected>🔍 Tìm Kiếm Từ Khóa</option>
                     <option value="artist">🎤 Nghệ Sĩ / Nhạc Sĩ</option>
@@ -188,6 +188,13 @@
                     <option value="jazz">Jazz</option>
                     <option value="acoustic">Acoustic</option>
                   </select>
+
+                  <!-- User-customizable Crawl Track Limit Input -->
+                  <div style="display: flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 2px 8px;" title="Tự chỉnh số lượng bài tối đa cần cào">
+                    <span style="font-size: 11px; color: var(--text-muted); white-space: nowrap;">Giới hạn:</span>
+                    <input type="number" id="crawl-limit" class="input-field" value="50" min="1" max="1000" style="width: 58px; padding: 4px 4px; font-size: 12px; font-weight: 700; text-align: center; border: none; background: transparent; color: var(--accent-cyan);">
+                    <span style="font-size: 11px; color: var(--text-dim);">bài</span>
+                  </div>
                 </div>
 
                 <div class="flex-row">

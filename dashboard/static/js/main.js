@@ -298,6 +298,7 @@ function renderGenres(genresMap, total) {
 const crawlMode = document.getElementById("crawl-mode");
 const crawlQuery = document.getElementById("crawl-query");
 const crawlGenre = document.getElementById("crawl-genre");
+const crawlLimit = document.getElementById("crawl-limit");
 
 if (crawlMode && crawlQuery) {
   crawlMode.addEventListener("change", () => {
@@ -350,7 +351,7 @@ function updateSelectionCount() {
 
 if (btnPreviewSearch) {
   btnPreviewSearch.addEventListener("click", () => {
-    const limit = parseInt(inputLimit.value) || 20;
+    const limit = crawlLimit ? (parseInt(crawlLimit.value) || 50) : 50;
     const mode = crawlMode ? crawlMode.value : "search";
     const query = crawlQuery ? crawlQuery.value.trim() : "";
     const genre = crawlGenre ? crawlGenre.value : "";
@@ -534,7 +535,7 @@ if (btnClosePreview) {
 // ─── Button Actions ──────────────────────────────────────────
 
 btnStartCrawl.addEventListener("click", () => {
-  const limit = parseInt(inputLimit.value) || 50;
+  const limit = crawlLimit ? (parseInt(crawlLimit.value) || 50) : 50;
   const mode = crawlMode ? crawlMode.value : "curated";
   const query = crawlQuery ? crawlQuery.value.trim() : "";
   const genre = crawlGenre ? crawlGenre.value : "";
