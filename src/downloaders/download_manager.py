@@ -17,10 +17,14 @@ from typing import Dict, Any, List, Optional, Tuple, Callable
 
 import yt_dlp
 
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from config import settings
 from src.storage.file_manager import FileManager
 from src.storage.db_manager import DBManager
 from src.processors.post_processor import PostProcessor
+from src.processors.audio_feature_extractor import AudioFeatureExtractor
 from src.downloaders.ytmusic_matcher import YTMusicMatcher
 from src.collectors.lyrics_collector import LyricsCollector
 from src.utils.fingerprint_generator import FingerprintGenerator
@@ -279,6 +283,17 @@ class DownloadManager:
                     lyrics_synced=synced_lyrics,
                     lrc_path=rel_lrc_path,
                 )
+
+                # Real-time AI Audio Feature & Waveform Extraction
+                try:
+                    features = AudioFeatureExtractor.analyze_track(final_path, spotify_id=spotify_id)
+                    if features.get("success"):
+                        self.db.db["tracks"].update_one(
+                            {"spotify_id": spotify_id},
+                            {"$set": {"audio_features": features}}
+                        )
+                except Exception as ex_feat:
+                    logger.debug(f"Audio feature extraction skipped for {spotify_id}: {ex_feat}")
 
                 if session_id:
                     self.session_manager.checkpoint(
@@ -766,4 +781,101 @@ class DownloadManager:
             "successful": successful_count,
             "failed": failed_count,
             "status": final_status,
+        }
+
+    def download_batch_parallel(
+        self,
+        limit: Optional[int] = None,
+        max_workers: int = 4,
+        specific_ids: Optional[List[str]] = None,
+        retry_failed: bool = False,
+        progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        should_stop_check: Optional[Callable[[], bool]] = None,
+        should_pause_check: Optional[Callable[[], bool]] = None,
+        session_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Download tracks in parallel across max_workers concurrent worker threads.
+        Accelerates batch downloads from minutes to seconds using multi-core processing.
+        """
+        if specific_ids:
+            pending_tracks = []
+            for sid in specific_ids:
+                t = self.db.get_track(sid)
+                if t:
+                    pending_tracks.append(t)
+        elif retry_failed:
+            pending_tracks = self.db.get_failed_tracks(limit=limit)
+        else:
+            pending_tracks = self.db.get_pending_tracks(limit=limit)
+
+        total_pending = len(pending_tracks)
+        if total_pending == 0:
+            return {"session_id": session_id, "total": 0, "successful": 0, "failed": 0, "status": "no_pending"}
+
+        if session_id is None:
+            session_id = self.session_manager.start_session(total_pending)
+
+        workers = max(1, min(8, int(max_workers)))
+        logger.info(f"⚡ Launching Multi-Worker Accelerator ({workers} concurrent workers) for {total_pending} tracks...")
+
+        completed_count = 0
+        successful_count = 0
+        failed_count = 0
+        results_lock = threading.Lock()
+
+        def _worker_task(item_idx: int, track_item: Dict[str, Any]):
+            nonlocal completed_count, successful_count, failed_count
+            if should_stop_check and should_stop_check():
+                return False, None, "stopped"
+
+            while should_pause_check and should_pause_check():
+                time.sleep(1)
+                if should_stop_check and should_stop_check():
+                    return False, None, "stopped"
+
+            ok, path, method = self.download_track(track_item, session_id=session_id)
+
+            with results_lock:
+                completed_count += 1
+                if ok:
+                    successful_count += 1
+                else:
+                    failed_count += 1
+
+                if progress_callback:
+                    progress_callback({
+                        "session_id": session_id,
+                        "index": completed_count,
+                        "total": total_pending,
+                        "track": track_item,
+                        "track_name": f"{track_item.get('artist_name')} - {track_item.get('name')}",
+                        "stage": "finished",
+                        "status": "success" if ok else "failed",
+                        "method": method,
+                        "success_count": successful_count,
+                        "failed_count": failed_count,
+                        "health": self.health_checker.get_status(),
+                    })
+
+            return ok, path, method
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [executor.submit(_worker_task, idx, t) for idx, t in enumerate(pending_tracks, 1)]
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as ex:
+                    logger.debug(f"Worker task error: {ex}")
+
+        final_status = "completed" if failed_count == 0 else "completed_with_errors"
+        self.session_manager.end_session(session_id, final_status)
+
+        return {
+            "session_id": session_id,
+            "total": total_pending,
+            "successful": successful_count,
+            "failed": failed_count,
+            "status": final_status,
+            "workers": workers,
         }

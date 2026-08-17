@@ -36,6 +36,10 @@ from src.utils.warp_controller import WarpController
 from src.utils.tailscale_controller import TailscaleController
 from src.utils.fingerprint_generator import FingerprintGenerator
 from src.utils.lock_manager import lock_manager
+from src.utils.hardware_monitor import HardwareMonitor
+from src.storage.cache_manager import ram_cache
+from src.processors.audio_feature_extractor import AudioFeatureExtractor
+from src.processors.enrichment_daemon import enrichment_daemon
 from src.utils.logger import get_logger
 
 logger = get_logger("dashboard")
@@ -78,6 +82,8 @@ class PipelineController:
         )
         FingerprintGenerator.set_db_manager(self.db)
         lock_manager.set_db_manager(self.db)
+        enrichment_daemon.db = self.db
+        enrichment_daemon.start()
 
         # Multi-Job Concurrent Registry
         self.active_jobs: Dict[str, Dict[str, Any]] = {}
@@ -304,6 +310,7 @@ class PipelineController:
         self,
         limit: int = 50,
         delay: float = 4.0,
+        concurrency: int = 4,
         retry_failed: bool = False,
         operator_name: str = "admin",
         specific_ids: Optional[List[str]] = None,
@@ -325,7 +332,7 @@ class PipelineController:
             self.log(msg, level="warning")
             return {"success": False, "error": msg}
 
-        task_name = f"Batch Download ({len(claimed_tracks)} bài)"
+        task_name = f"Batch Download ({len(claimed_tracks)} bài - {concurrency} luồng)"
         stop_event = threading.Event()
         pause_event = threading.Event()
 
@@ -352,7 +359,7 @@ class PipelineController:
         with self._jobs_lock:
             self.active_jobs[job_id] = job_info
 
-        self.log(f"🎧 [Job {job_id[:12]}] Bắt đầu tải {len(claimed_tracks)} bài hát song song (Operator: @{operator_name})...", level="info")
+        self.log(f"🎧 [Job {job_id[:12]}] Bắt đầu tải {len(claimed_tracks)} bài hát ({concurrency} luồng song song, Operator: @{operator_name})...", level="info")
         self.broadcast_jobs_state()
 
         def _download_worker():
@@ -388,14 +395,24 @@ class PipelineController:
                             self.log(f"❌ [Job {job_id[:12]}] [{curr_idx}/{total}] Lỗi tải: {t_artist} - {t_title}", level="error")
                         self.broadcast_stats()
 
-                res = self.dm.download_batch(
-                    tracks=claimed_tracks,
-                    delay_seconds=delay,
-                    progress_callback=_progress_cb,
-                    should_pause_check=lambda: pause_event.is_set(),
-                    should_stop_check=lambda: stop_event.is_set(),
-                    session_id=int(time.time()),
-                )
+                if concurrency > 1:
+                    res = self.dm.download_batch_parallel(
+                        specific_ids=[t["spotify_id"] for t in claimed_tracks],
+                        max_workers=concurrency,
+                        progress_callback=_progress_cb,
+                        should_pause_check=lambda: pause_event.is_set(),
+                        should_stop_check=lambda: stop_event.is_set(),
+                        session_id=int(time.time()),
+                    )
+                else:
+                    res = self.dm.download_batch(
+                        tracks=claimed_tracks,
+                        delay_seconds=delay,
+                        progress_callback=_progress_cb,
+                        should_pause_check=lambda: pause_event.is_set(),
+                        should_stop_check=lambda: stop_event.is_set(),
+                        session_id=int(time.time()),
+                    )
 
                 s_cnt = res.get("successful", res.get("success", 0))
                 f_cnt = res.get("failed", 0)
@@ -529,6 +546,9 @@ class PipelineController:
         sessions = self.sm.get_session_stats()
         health = self.health.get_status()
         proxy = self.pm.get_status()
+        hardware = HardwareMonitor.get_system_metrics()
+        cache_stats = ram_cache.get_stats()
+        enrichment_stats = enrichment_daemon.get_status()
 
         socketio.emit(
             "stats_update",
@@ -538,6 +558,9 @@ class PipelineController:
                 "sessions": sessions,
                 "health": health,
                 "proxy": proxy,
+                "hardware": hardware,
+                "cache": cache_stats,
+                "enrichment": enrichment_stats,
                 "task": self.active_task_name,
                 "is_running": self.is_running,
                 "is_paused": self.is_paused,
@@ -1442,6 +1465,94 @@ def api_disconnect_tailscale():
     controller.pm.sync_from_db()
     status = TailscaleController.get_status()
     return jsonify({"success": ok, "tailscale": status, **status})
+
+
+# ─── AI Audio Features, Waveform & System Telemetry REST APIs ──
+
+@app.route("/api/tracks/<spotify_id>/features", methods=["GET"])
+def api_get_track_audio_features(spotify_id):
+    """Get or compute AI audio features and waveform peaks for a track."""
+    cached = ram_cache.get(f"feat_{spotify_id}")
+    if cached:
+        return jsonify({"success": True, "features": cached, "cached": True})
+
+    track = controller.db.get_track(spotify_id)
+    if not track:
+        return jsonify({"success": False, "error": "Không tìm thấy bài hát"}), 404
+
+    features = track.get("audio_features")
+    if not features:
+        rel_path = track.get("local_path")
+        if rel_path:
+            full_p = settings.BASE_DIR / rel_path
+            if full_p.exists():
+                features = AudioFeatureExtractor.analyze_track(full_p, spotify_id=spotify_id)
+                if features.get("success"):
+                    controller.db.db["tracks"].update_one(
+                        {"spotify_id": spotify_id},
+                        {"$set": {"audio_features": features}}
+                    )
+
+    if features:
+        ram_cache.set(f"feat_{spotify_id}", features, ttl_sec=600)
+        return jsonify({"success": True, "features": features})
+
+    return jsonify({"success": False, "error": "Chưa có dữ liệu phân tích âm học cho bài hát này"}), 404
+
+
+@app.route("/api/tracks/<spotify_id>/analyze", methods=["POST"])
+def api_analyze_track_audio_features(spotify_id):
+    """Force re-analysis of acoustic features and waveform for a track."""
+    track = controller.db.get_track(spotify_id)
+    if not track or not track.get("local_path"):
+        return jsonify({"success": False, "error": "Bài hát chưa được tải về máy chủ"}), 400
+
+    full_p = settings.BASE_DIR / track["local_path"]
+    if not full_p.exists():
+        return jsonify({"success": False, "error": "File audio không tồn tại trên đĩa"}), 404
+
+    features = AudioFeatureExtractor.analyze_track(full_p, spotify_id=spotify_id)
+    if features.get("success"):
+        controller.db.db["tracks"].update_one(
+            {"spotify_id": spotify_id},
+            {"$set": {"audio_features": features}}
+        )
+        ram_cache.set(f"feat_{spotify_id}", features, ttl_sec=600)
+        return jsonify({"success": True, "features": features})
+    return jsonify({"success": False, "error": "Lỗi phân tích đặc trưng âm thanh"}), 500
+
+
+@app.route("/api/system/hardware", methods=["GET"])
+def api_get_hardware_metrics():
+    """Retrieve real-time CPU %, RAM utilization, and system specs."""
+    metrics = HardwareMonitor.get_system_metrics()
+    return jsonify({"success": True, "hardware": metrics})
+
+
+@app.route("/api/system/enrichment/status", methods=["GET"])
+def api_get_enrichment_status():
+    """Retrieve background auto-enrichment daemon status."""
+    return jsonify({"success": True, "enrichment": enrichment_daemon.get_status()})
+
+
+@app.route("/api/system/enrichment/trigger", methods=["POST"])
+def api_trigger_enrichment_pass():
+    """Trigger an immediate background enrichment pass."""
+    res = enrichment_daemon.trigger_pass_now()
+    return jsonify(res)
+
+
+@app.route("/api/system/cache/stats", methods=["GET"])
+def api_get_cache_stats():
+    """Retrieve in-memory RAM cache hit/miss statistics."""
+    return jsonify({"success": True, "cache": ram_cache.get_stats()})
+
+
+@app.route("/api/system/cache/clear", methods=["POST"])
+def api_clear_ram_cache():
+    """Clear RAM cache entries."""
+    ram_cache.clear()
+    return jsonify({"success": True, "message": "Đã làm trống bộ nhớ đệm RAM thành công!"})
 
 
 @app.route("/api/network/fingerprints", methods=["GET"])
@@ -2470,12 +2581,14 @@ def handle_start_crawl(data):
 def handle_start_download(data):
     limit = int(data.get("limit", 50))
     delay = float(data.get("delay", 3.0))
+    concurrency = int(data.get("concurrency", 4))
     retry_failed = bool(data.get("retry_failed", False))
     specific_ids = data.get("specific_ids", None)
     operator = data.get("operator") or session.get("user", {}).get("username", "admin")
     controller.start_download_task(
         limit=limit,
         delay=delay,
+        concurrency=concurrency,
         retry_failed=retry_failed,
         operator_name=operator,
         specific_ids=specific_ids,

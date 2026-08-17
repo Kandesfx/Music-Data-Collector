@@ -5442,5 +5442,215 @@ socket.on("pipeline_lock_conflict", (data) => {
   }
 })();
 
+// ─── AI Audio Waveform Visualizer & Acoustic Intelligence Module ─
+(function initAudioFeaturesAndWaveform() {
+  let activeWaveformPeaks = [];
+  let currentInspectedTrackId = null;
+
+  // 1. Draw Waveform on Player Bar Canvas
+  function drawPlayerWaveform(progress = 0) {
+    const canvas = document.getElementById("player-waveform-canvas");
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    canvas.width = rect.width * (window.devicePixelRatio || 1);
+    canvas.height = rect.height * (window.devicePixelRatio || 1);
+
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const peaks = (activeWaveformPeaks && activeWaveformPeaks.length > 0)
+      ? activeWaveformPeaks
+      : Array.from({ length: 80 }, (_, i) => 0.3 + 0.5 * Math.abs(Math.sin(i * 0.2)));
+
+    const numBars = peaks.length;
+    const barWidth = Math.max(2, (canvas.width / numBars) - 1.5);
+    const gap = 1.5;
+    const activeIndex = Math.floor(progress * numBars);
+
+    for (let i = 0; i < numBars; i++) {
+      const x = i * (barWidth + gap);
+      const barHeight = Math.max(3, peaks[i] * (canvas.height * 0.85));
+      const y = (canvas.height - barHeight) / 2;
+
+      ctx.beginPath();
+      ctx.roundRect(x, y, barWidth, barHeight, 2);
+
+      if (i <= activeIndex) {
+        // Played section gradient: Emerald to Cyan
+        const grad = ctx.createLinearGradient(0, y, 0, y + barHeight);
+        grad.addColorStop(0, "#10b981");
+        grad.addColorStop(1, "#06b6d4");
+        ctx.fillStyle = grad;
+      } else {
+        // Unplayed section: sleek translucent white
+        ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
+      }
+      ctx.fill();
+    }
+  }
+
+  window.drawPlayerWaveform = drawPlayerWaveform;
+
+  // 2. Fetch and Cache Waveform Peaks on Play
+  async function loadWaveformForTrack(spotifyId) {
+    activeWaveformPeaks = [];
+    drawPlayerWaveform(0);
+
+    if (!spotifyId) return;
+
+    try {
+      const res = await fetch(`/api/tracks/${spotifyId}/features`);
+      const data = await res.json();
+      if (data.success && data.features && data.features.waveform_peaks) {
+        activeWaveformPeaks = data.features.waveform_peaks;
+        const inAppAudio = document.getElementById("in-app-audio-element");
+        const cur = inAppAudio ? inAppAudio.currentTime || 0 : 0;
+        const dur = inAppAudio ? inAppAudio.duration || 1 : 1;
+        drawPlayerWaveform(cur / Math.max(dur, 1));
+      }
+    } catch (e) {
+      console.debug("Waveform fetch failed:", e);
+    }
+  }
+
+  // Hook into in-app audio timeupdate
+  const audioEl = document.getElementById("in-app-audio-element");
+  if (audioEl) {
+    audioEl.addEventListener("timeupdate", () => {
+      const cur = audioEl.currentTime || 0;
+      const dur = audioEl.duration || 1;
+      drawPlayerWaveform(cur / Math.max(dur, 1));
+    });
+
+    audioEl.addEventListener("play", () => {
+      if (window.currentPlayingTrack && window.currentPlayingTrack.spotify_id) {
+        loadWaveformForTrack(window.currentPlayingTrack.spotify_id);
+      }
+    });
+  }
+
+  // Window resize re-draw
+  window.addEventListener("resize", () => {
+    const audioEl = document.getElementById("in-app-audio-element");
+    const cur = audioEl ? audioEl.currentTime || 0 : 0;
+    const dur = audioEl ? audioEl.duration || 1 : 1;
+    drawPlayerWaveform(cur / Math.max(dur, 1));
+  });
+
+  // 3. Populate AI Acoustic Intelligence Tab in Inspector Modal
+  async function renderAcousticFeatures(spotifyId) {
+    currentInspectedTrackId = spotifyId;
+
+    const bpmEl = document.getElementById("inspect-feat-bpm");
+    const keyEl = document.getElementById("inspect-feat-key");
+    const lufsEl = document.getElementById("inspect-feat-lufs");
+    const energyVal = document.getElementById("inspect-feat-energy-val");
+    const energyBar = document.getElementById("inspect-feat-energy-bar");
+    const danceVal = document.getElementById("inspect-feat-dance-val");
+    const danceBar = document.getElementById("inspect-feat-dance-bar");
+    const valenceVal = document.getElementById("inspect-feat-valence-val");
+    const valenceBar = document.getElementById("inspect-feat-valence-bar");
+    const acousticVal = document.getElementById("inspect-feat-acoustic-val");
+    const acousticBar = document.getElementById("inspect-feat-acoustic-bar");
+    const waveBox = document.getElementById("inspect-waveform-canvas-box");
+
+    if (bpmEl) bpmEl.textContent = "⏳ Đang tính...";
+    if (keyEl) keyEl.textContent = "⏳ Đang tính...";
+    if (lufsEl) lufsEl.textContent = "⏳ Đang tính...";
+
+    try {
+      const res = await fetch(`/api/tracks/${spotifyId}/features`);
+      const data = await res.json();
+      if (data.success && data.features) {
+        const f = data.features;
+        if (bpmEl) bpmEl.textContent = `${f.bpm || 120} BPM`;
+        if (keyEl) keyEl.textContent = `${f.key_signature || 'C Major'} (${Math.round((f.key_confidence || 0.8) * 100)}%)`;
+        if (lufsEl) lufsEl.textContent = `${f.loudness_lufs || -14.0} LUFS`;
+
+        const nEnergy = Math.round((f.energy || 0.7) * 100);
+        const nDance = Math.round((f.danceability || 0.7) * 100);
+        const nValence = Math.round((f.valence || 0.6) * 100);
+        const nAcoustic = Math.round((f.acousticness || 0.2) * 100);
+
+        if (energyVal) energyVal.textContent = `${nEnergy}%`;
+        if (energyBar) energyBar.style.width = `${nEnergy}%`;
+
+        if (danceVal) danceVal.textContent = `${nDance}%`;
+        if (danceBar) danceBar.style.width = `${nDance}%`;
+
+        if (valenceVal) valenceVal.textContent = `${nValence}%`;
+        if (valenceBar) valenceBar.style.width = `${nValence}%`;
+
+        if (acousticVal) acousticVal.textContent = `${nAcoustic}%`;
+        if (acousticBar) acousticBar.style.width = `${nAcoustic}%`;
+
+        // Render 100-bar Spectrum in Modal
+        if (waveBox && f.waveform_peaks) {
+          waveBox.innerHTML = f.waveform_peaks.map((p, idx) => {
+            const h = Math.max(4, Math.round(p * 56));
+            return `<div style="flex: 1; height: ${h}px; background: linear-gradient(180deg, #06b6d4, #6366f1); border-radius: 1px;" title="Frame #${idx + 1}: ${Math.round(p * 100)}%"></div>`;
+          }).join("");
+        }
+      } else {
+        if (bpmEl) bpmEl.textContent = "Chưa có";
+        if (keyEl) keyEl.textContent = "Chưa có";
+        if (lufsEl) lufsEl.textContent = "Chưa có";
+      }
+    } catch (err) {
+      if (bpmEl) bpmEl.textContent = "Lỗi kết nối";
+    }
+  }
+
+  window.renderAcousticFeatures = renderAcousticFeatures;
+
+  // 4. Force Re-analyze Button Handler
+  const btnReanalyze = document.getElementById("btn-reanalyze-features");
+  if (btnReanalyze) {
+    btnReanalyze.addEventListener("click", async () => {
+      if (!currentInspectedTrackId) return;
+
+      btnReanalyze.disabled = true;
+      btnReanalyze.textContent = "⏳ Đang phân tích DSP...";
+
+      try {
+        const res = await fetch(`/api/tracks/${currentInspectedTrackId}/analyze`, { method: "POST" });
+        const data = await res.json();
+        if (data.success) {
+          await renderAcousticFeatures(currentInspectedTrackId);
+          if (typeof appendLog === "function") {
+            appendLog(`🧠 Đã tái phân tích đặc trưng âm học AI thành công: ${data.features.bpm} BPM, ${data.features.key_signature}, ${data.features.loudness_lufs} LUFS!`, "success");
+          }
+        } else {
+          alert(`Lỗi phân tích: ${data.error}`);
+        }
+      } catch (err) {
+        alert(`Lỗi kết nối phân tích AI: ${err.message}`);
+      } finally {
+        btnReanalyze.disabled = false;
+        btnReanalyze.textContent = "⚡ Tái Phân Tích Âm Học";
+      }
+    });
+  }
+
+  // 5. Inspector Tabs Switching Support for Acoustic Tab
+  document.addEventListener("click", (e) => {
+    const tabBtn = e.target.closest(".inspector-tab-btn");
+    if (!tabBtn) return;
+
+    const targetTab = tabBtn.getAttribute("data-tab");
+    if (targetTab === "tab-inspect-acoustic") {
+      const inspectIdEl = document.getElementById("inspect-spotify-id");
+      const spId = inspectIdEl ? inspectIdEl.textContent.trim() : null;
+      if (spId && spId !== "-") {
+        renderAcousticFeatures(spId);
+      }
+    }
+  });
+
+})();
+
 
 
