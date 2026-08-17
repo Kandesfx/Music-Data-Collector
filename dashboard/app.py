@@ -1819,13 +1819,14 @@ def handle_search_preview(data):
     mode = data.get("mode", "artist")
     query = data.get("query", "").strip()
     genre = data.get("genre", None)
-    limit = int(data.get("limit", 20))
+    limit = int(data.get("limit", 50))
+    fetch_max = max(100, limit * 2)
 
     if not query and mode != "curated":
         controller.log("Please enter a query to preview search results.", level="warning")
         return
 
-    controller.log(f"🔍 Searching & previewing tracks [Mode: {mode.upper()}, Query: '{query or 'Curated'}' (Limit: {limit})...")
+    controller.log(f"🔍 Searching & previewing tracks [Mode: {mode.upper()}, Query: '{query or 'Curated'}' (Pre-select: {limit}, Fetch max: {fetch_max})...")
     socketio.emit("task_status", {"task": f"Searching: {query or mode}", "running": True})
 
     def _preview_worker():
@@ -1838,11 +1839,11 @@ def handle_search_preview(data):
                     playlists_path = settings.BASE_DIR / "config" / "playlists.json"
                 with open(playlists_path, "r", encoding="utf-8") as f:
                     target_playlists = json.load(f).get("playlists", [])
-                for pl in target_playlists[:3]:  # preview sample from first 3 playlists
-                    tracks = collector.collect_playlist_tracks(pl.get("url"), max_tracks=5, default_genre=pl.get("genre"))
+                for pl in target_playlists[:5]:  # preview sample from playlists
+                    tracks = collector.collect_playlist_tracks(pl.get("url"), max_tracks=limit, default_genre=pl.get("genre"))
                     raw_tracks.extend(tracks)
             else:
-                raw_tracks = collector.collect_custom(mode=mode, query=query, max_tracks=limit, default_genre=genre)
+                raw_tracks = collector.collect_custom(mode=mode, query=query, max_tracks=fetch_max, default_genre=genre)
 
             # Check DB status for each track
             existing_db_tracks = controller.db.get_all_tracks()
@@ -1868,9 +1869,10 @@ def handle_search_preview(data):
 
                 preview_list.append(t)
 
-            controller.log(f"Found {len(preview_list)} track candidates for preview.", level="info")
+            controller.log(f"Found {len(preview_list)} track candidates for preview (Pre-select: {min(limit, len(preview_list))}).", level="info")
             socketio.emit("search_results", {
                 "tracks": preview_list,
+                "requested_limit": limit,
                 "query": query,
                 "mode": mode,
                 "genre": genre,
@@ -1880,6 +1882,7 @@ def handle_search_preview(data):
             controller.log(f"Preview search failed: {ex}", level="error")
             socketio.emit("search_results", {
                 "tracks": [],
+                "requested_limit": limit,
                 "query": query,
                 "mode": mode,
                 "genre": genre,

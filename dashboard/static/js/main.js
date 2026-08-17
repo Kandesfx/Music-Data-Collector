@@ -353,6 +353,7 @@ const btnImportSelected = document.getElementById("btn-import-selected");
 const btnClosePreview = document.getElementById("btn-close-preview");
 
 let currentPreviewTracks = [];
+let lastRequestedLimit = 50;
 
 function updateSelectionCount() {
   const checkboxes = previewTableBody.querySelectorAll(".track-select-cb");
@@ -360,7 +361,8 @@ function updateSelectionCount() {
   checkboxes.forEach((cb) => {
     if (cb.checked) selected++;
   });
-  selectedCountLabel.textContent = `Đã chọn: ${selected} / ${currentPreviewTracks.length} bài`;
+  const preselected = Math.min(lastRequestedLimit, currentPreviewTracks.length);
+  selectedCountLabel.textContent = `Đã chọn: ${selected} / ${currentPreviewTracks.length} bài (Mặc định chọn sẵn ${preselected} bài đầu tiên - bạn có thể chọn thêm tùy thích)`;
   btnImportSelected.textContent = `📥 Import Selected (${selected} bài)`;
   btnImportSelected.disabled = selected === 0;
 }
@@ -396,8 +398,9 @@ socket.on("search_results", (data) => {
   }
 
   currentPreviewTracks = data.tracks || [];
+  lastRequestedLimit = data.requested_limit || (crawlLimit ? parseInt(crawlLimit.value) || 50 : 50);
   if (previewSection) previewSection.style.display = "block";
-  if (previewStats) previewStats.textContent = `(Tìm thấy: ${currentPreviewTracks.length} bài cho '${data.query || data.mode}')`;
+  if (previewStats) previewStats.textContent = `(Tìm thấy: ${currentPreviewTracks.length} bài cho '${data.query || data.mode}' — Chọn sẵn ${Math.min(lastRequestedLimit, currentPreviewTracks.length)} bài đầu tiên)`;
 
   if (previewTableBody) {
     previewTableBody.innerHTML = "";
@@ -442,9 +445,11 @@ socket.on("search_results", (data) => {
       artistHtml = `<div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">🎤 ${t.artist_name || "Unknown Artist"}</div>`;
     }
 
+    const isPreSelected = idx < lastRequestedLimit && t.db_status !== "downloaded";
+
     row.innerHTML = `
       <td style="padding: 8px 10px;">
-        <input type="checkbox" class="track-select-cb" data-index="${idx}" ${t.db_status === "downloaded" ? "" : "checked"} style="cursor: pointer; transform: scale(1.15);">
+        <input type="checkbox" class="track-select-cb" data-index="${idx}" ${isPreSelected ? "checked" : ""} style="cursor: pointer; transform: scale(1.15);">
       </td>
       <td style="padding: 8px 10px;">${coverImg}</td>
       <td style="padding: 8px 10px;">

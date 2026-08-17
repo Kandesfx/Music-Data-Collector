@@ -292,7 +292,29 @@ class SpotifyCollector:
         logger.info(f"🔍 Searching Spotify tracks with query: '{query}' (limit: {max_tracks})...")
         tracks: List[Dict[str, Any]] = []
 
-        # 1. Try FreeSpotify search
+        # 1. Try Spotipy search with pagination
+        if self.sp:
+            try:
+                offset = 0
+                while len(tracks) < max_tracks:
+                    fetch_limit = min(50, max_tracks - len(tracks))
+                    res = self.sp.search(query, type="track", limit=fetch_limit, offset=offset)
+                    items = res.get("tracks", {}).get("items", [])
+                    if not items:
+                        break
+                    for t in items:
+                        clean_t = self._clean_track_dict(t, default_genre=default_genre)
+                        if clean_t:
+                            tracks.append(clean_t)
+                    if len(items) < fetch_limit or not res.get("tracks", {}).get("next"):
+                        break
+                    offset += len(items)
+                if tracks:
+                    return tracks
+            except Exception as ex:
+                logger.warning(f"Spotipy search error: {ex}")
+
+        # 2. Try FreeSpotify search
         if self.free_sp:
             try:
                 res = self.free_sp.search(query, type="track", limit=min(50, max_tracks))
@@ -308,32 +330,21 @@ class SpotifyCollector:
             except Exception as e:
                 logger.debug(f"FreeSpotify search notice: {e}")
 
-        # 2. Try Spotipy search
-        if self.sp:
-            try:
-                res = self.sp.search(query, type="track", limit=min(50, max_tracks))
-                items = res.get("tracks", {}).get("items", [])
-                for t in items:
-                    clean_t = self._clean_track_dict(t, default_genre=default_genre)
-                    if clean_t:
-                        tracks.append(clean_t)
-                    if len(tracks) >= max_tracks:
-                        break
-            except Exception as ex:
-                logger.warning(f"Spotipy search error: {ex}")
-
         # 3. Resilient Public Search API Fallback (iTunes / Apple Music Engine)
-        if not tracks:
+        if not tracks or len(tracks) < max_tracks:
             try:
                 import urllib.request
                 import urllib.parse
                 safe_q = urllib.parse.quote(query)
-                itunes_url = f"https://itunes.apple.com/search?term={safe_q}&media=music&entity=song&limit={min(50, max_tracks)}&country=VN"
+                itunes_url = f"https://itunes.apple.com/search?term={safe_q}&media=music&entity=song&limit={min(200, max_tracks)}&country=VN"
                 req = urllib.request.Request(itunes_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
                 with urllib.request.urlopen(req, timeout=5) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
+                    existing_ids = {t["spotify_id"] for t in tracks}
                     for it in data.get("results", []):
                         track_id = f"itunes_{it.get('trackId')}"
+                        if track_id in existing_ids:
+                            continue
                         art_name = it.get("artistName", "Unknown Artist")
                         t_name = it.get("trackName", "Unknown Track")
                         alb_name = it.get("collectionName", "Single")
@@ -357,6 +368,8 @@ class SpotifyCollector:
                             "disc_number": it.get("discNumber", 1),
                             "explicit": it.get("trackExplicitness") == "explicit",
                         })
+                        if len(tracks) >= max_tracks:
+                            break
             except Exception as e:
                 logger.debug(f"Search API fallback note: {e}")
 
