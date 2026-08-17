@@ -1,7 +1,7 @@
-"""
-Scripts - Auto Installer for Cloudflare WARP SOCKS5 Gateway on Ubuntu 22.04 (OCI)
-Sets up cloudflare-warp daemon in proxy mode (127.0.0.1:40000) to mask Oracle Datacenter IP.
-"""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.deploy_to_oci import run_ssh_command
 

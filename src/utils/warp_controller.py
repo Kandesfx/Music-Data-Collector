@@ -41,12 +41,12 @@ class WarpController:
             }
 
         try:
-            res = subprocess.run(["warp-cli", "status"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
+            res = subprocess.run(["warp-cli", "--accept-tos", "status"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
             output = (res.stdout + res.stderr).strip()
             is_connected = "Connected" in output or "Status update: Connected" in output
             
             # Check mode & settings
-            mode_res = subprocess.run(["warp-cli", "mode"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
+            mode_res = subprocess.run(["warp-cli", "--accept-tos", "mode"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
             mode_str = (mode_res.stdout + mode_res.stderr).strip()
 
             return {
@@ -75,7 +75,7 @@ class WarpController:
         if not cls.is_installed():
             return False
         try:
-            subprocess.run(["warp-cli", "connect"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+            subprocess.run(["warp-cli", "--accept-tos", "connect"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
             time.sleep(1)
             status = cls.get_status()
             logger.info(f"Cloudflare WARP connect result: {status['status']}")
@@ -90,7 +90,7 @@ class WarpController:
         if not cls.is_installed():
             return False
         try:
-            subprocess.run(["warp-cli", "disconnect"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+            subprocess.run(["warp-cli", "--accept-tos", "disconnect"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
             time.sleep(1)
             status = cls.get_status()
             logger.info(f"Cloudflare WARP disconnect result: {status['status']}")
