@@ -74,12 +74,12 @@ class TailscaleController:
             backend_state = data.get("BackendState", "Unknown")
             is_connected = backend_state == "Running"
             
-            self_node = data.get("Self", {})
-            tailscale_ips = self_node.get("TailscaleIPs", [])
+            self_node = data.get("Self") or {}
+            tailscale_ips = self_node.get("TailscaleIPs") or []
             hostname = self_node.get("HostName", "")
             
             # Find available exit nodes from peers
-            peers = data.get("Peer", {})
+            peers = data.get("Peer") or {}
             available_exit_nodes: List[Dict[str, Any]] = []
             active_exit_node: Optional[Dict[str, Any]] = None
 
