@@ -605,32 +605,74 @@ class DownloadManager:
         output_dir: Path,
         proxy: Optional[str] = None,
     ) -> Tuple[bool, Optional[Path], Optional[str]]:
-        """Download track directly from YouTube/YTMusic using yt-dlp in-process at 320kbps with auto-fallback."""
+        """
+        Download track using yt-dlp at 320kbps with strict priority routing:
+        1. [TIER 1 - HIGHEST PRIORITY]: Tailscale Residential Exit Node / SOCKS5 / WARP WITHOUT COOKIES.
+        2. [TIER 2 - SECONDARY FALLBACK]: Proxy WITH Cookie Authentication (for age-gated/login-only tracks).
+        3. [TIER 3 - FINAL RESORT]: Direct connection (without cookie, then with cookie).
+        """
         out_template = str(output_dir / "audio.%(ext)s")
         active_cookie = self._get_active_cookie_file()
 
-        # Build fallback proxy sequence
-        proxy_candidates = [proxy]
+        # Build candidate proxy sequence with Tailscale priority
+        proxy_candidates = []
+        if proxy and proxy not in proxy_candidates:
+            proxy_candidates.append(proxy)
+
+        # Priority 1: Tailscale SOCKS5 Residential Proxy (port 1055)
+        tailscale_proxy = "socks5://127.0.0.1:1055"
+        if tailscale_proxy not in proxy_candidates:
+            proxy_candidates.append(tailscale_proxy)
+
+        # Priority 2: Managed Proxies from DB/ProxyManager
         if self.proxy_manager.enabled:
             alt_proxy = self.proxy_manager.get_proxy()
             if alt_proxy and alt_proxy not in proxy_candidates:
                 proxy_candidates.append(alt_proxy)
-            # Add WARP fallback if not already primary
-        # Build multi-strategy attempt configurations:
-        # 1. Try with active cookie (if exists) + proxies
-        # 2. If cookie is invalid/expired, automatically drop cookie and retry via Tailscale / WARP
-        # 3. Mobile clients (android, ios, tv) without cookies
+
+        # Priority 3: Cloudflare WARP SOCKS5
+        warp_proxy = "socks5://127.0.0.1:40000"
+        if warp_proxy not in proxy_candidates:
+            proxy_candidates.append(warp_proxy)
+
+        # ─── BUILD STRICT PRIORITY ATTEMPTS ──────────────────────────
         attempt_configs = []
+
+        # TIER 1 (ƯU TIÊN SỐ 1): Tailscale & Proxies HOÀN TOÀN KHÔNG DÙNG COOKIE (Dùng IP dân cư sạch)
+        for p in proxy_candidates:
+            if p:
+                attempt_configs.append({
+                    "name": f"Tailscale/Residential Proxy No-Cookie ({p})",
+                    "proxy": p,
+                    "cookie": None,
+                    "clients": ["android", "ios", "tv", "web"]
+                })
+
+        # TIER 2 (DỰ PHÒNG SỐ 2): Nếu gặp bài hát bị khóa/yêu cầu đăng nhập, mới kích hoạt Cookie
         if active_cookie:
-            for p in proxy_candidates[:2]:
-                attempt_configs.append({"proxy": p, "cookie": active_cookie, "clients": ["web", "mweb", "android"]})
+            for p in proxy_candidates:
+                if p:
+                    attempt_configs.append({
+                        "name": f"Proxy with Cookie Authentication ({p})",
+                        "proxy": p,
+                        "cookie": active_cookie,
+                        "clients": ["web", "mweb", "android"]
+                    })
 
-        # No-cookie attempts (works seamlessly with Tailscale residential IP and WARP)
-        for p in proxy_candidates[:2]:
-            attempt_configs.append({"proxy": p, "cookie": None, "clients": ["android", "ios", "tv", "mweb"]})
-
-        # Direct connection attempt as fallback
-        attempt_configs.append({"proxy": None, "cookie": None, "clients": ["android", "ios", "tv", "web"]})
+        # TIER 3 (DỰ PHÒNG CUỐI CÙNG): Kết nối Direct
+        attempt_configs.append({
+            "name": "Direct Connection without Cookie",
+            "proxy": None,
+            "cookie": None,
+            "clients": ["android", "ios", "tv", "web"]
+        })
+        if active_cookie:
+            attempt_configs.append({
+                "name": "Direct Connection with Cookie Auth",
+                "proxy": None,
+                "cookie": active_cookie,
+                "clients": ["web", "mweb", "android"]
+            })
 
         last_error = None
         for attempt_idx, config in enumerate(attempt_configs):
@@ -657,7 +699,7 @@ class DownloadManager:
                 "quiet": True,
                 "no_warnings": True,
                 "noplaylist": True,
-                "socket_timeout": 30,
+                "socket_timeout": 25,
             }
 
             if not target_url_or_query.startswith("http://") and not target_url_or_query.startswith("https://"):
@@ -695,7 +737,7 @@ class DownloadManager:
                 if "sign in to confirm" in err_str.lower() or "bot" in err_str.lower():
                     FingerprintGenerator.set_active_profile("random")
 
-                time.sleep(0.5)
+                time.sleep(0.3)
 
         return False, None, last_error or "yt-dlp failed on all fallback attempts."
 
