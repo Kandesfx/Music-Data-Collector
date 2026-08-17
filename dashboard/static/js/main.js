@@ -4825,16 +4825,35 @@ socket.on("track_redownloaded", (data) => {
     });
   }
 })();
-
-// ─── Interactive System Guide Modal Controller ──────────────
 // ─── Interactive System Guide Modal Controller ──────────────
 (function initGuideModal() {
   function switchGuideTab(tabId) {
+    if (!tabId) tabId = "guide-tab-overview";
+    if (tabId.startsWith("tab-guide-")) {
+      tabId = tabId.replace("tab-guide-", "guide-tab-");
+    }
+    
     const btns = document.querySelectorAll(".guide-tab-btn");
     const contents = document.querySelectorAll(".guide-tab-content");
 
+    let foundContent = false;
+    contents.forEach(c => {
+      if (c.id === tabId) {
+        c.style.display = "flex";
+        foundContent = true;
+      } else {
+        c.style.display = "none";
+      }
+    });
+
+    if (!foundContent && contents.length > 0) {
+      contents[0].style.display = "flex";
+      tabId = contents[0].id;
+    }
+
     btns.forEach(btn => {
-      if (btn.getAttribute("data-tab") === tabId) {
+      const btnTab = btn.getAttribute("data-tab");
+      if (btnTab === tabId || (btnTab && btnTab.replace("tab-guide-", "guide-tab-") === tabId)) {
         btn.classList.add("btn-primary");
         btn.classList.remove("btn-secondary");
       } else {
@@ -4842,17 +4861,11 @@ socket.on("track_redownloaded", (data) => {
         btn.classList.add("btn-secondary");
       }
     });
-
-    contents.forEach(c => {
-      if (c.id === tabId) {
-        c.style.display = "flex";
-      } else {
-        c.style.display = "none";
-      }
-    });
   }
 
-  window.openGuideModal = function(targetTab = "tab-guide-overview") {
+  window.switchGuideTab = switchGuideTab;
+
+  window.openGuideModal = function(targetTab = "guide-tab-overview") {
     const modal = document.getElementById("guide-modal");
     if (modal) {
       modal.style.display = "flex";
@@ -4863,6 +4876,10 @@ socket.on("track_redownloaded", (data) => {
   window.closeGuideModal = function() {
     const modal = document.getElementById("guide-modal");
     if (modal) modal.style.display = "none";
+    const cb = document.getElementById("cb-guide-dont-show-again");
+    if (cb && cb.checked) {
+      localStorage.setItem("dont_show_guide_again", "true");
+    }
   };
 
   document.addEventListener("click", (e) => {
@@ -4877,6 +4894,15 @@ socket.on("track_redownloaded", (data) => {
       window.closeGuideModal();
     }
   });
+
+  // Auto-open for first-time session
+  if (!localStorage.getItem("dont_show_guide_again") && !sessionStorage.getItem("guide_seen_session")) {
+    sessionStorage.setItem("guide_seen_session", "true");
+    setTimeout(() => {
+      window.openGuideModal("guide-tab-overview");
+    }, 600);
+  }
 })();
+
 
 
