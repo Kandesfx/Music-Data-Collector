@@ -181,6 +181,9 @@ class TailscaleController:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    # Alias for backward compatibility
+    connect = connect_with_auth_key
+
     @classmethod
     def _do_set_exit_node(cls, exit_node_name_or_ip: str) -> Dict[str, Any]:
         clean_node = exit_node_name_or_ip.strip()

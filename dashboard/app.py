@@ -1409,12 +1409,16 @@ def api_connect_tailscale():
     body = request.get_json() or {}
     auth_key = body.get("auth_key", "").strip()
     exit_node = body.get("exit_node", "").strip() or None
+    socks5_port = int(body.get("socks5_port", 1055))
     if not auth_key:
         return jsonify({"success": False, "error": "Auth Key không được để trống!"}), 400
 
-    ok = TailscaleController.connect(auth_key=auth_key, exit_node=exit_node)
+    result = TailscaleController.connect_with_auth_key(auth_key=auth_key, exit_node=exit_node, socks5_port=socks5_port)
     controller.pm.sync_from_db()
-    return jsonify({"success": ok, **TailscaleController.get_status()})
+    status = TailscaleController.get_status()
+    if not result.get("success"):
+        return jsonify({"success": False, "error": result.get("error", "Lỗi kết nối Tailscale"), "tailscale": status})
+    return jsonify({"success": True, "tailscale": status, **status})
 
 
 @app.route("/api/network/tailscale/exit_node", methods=["POST"])
@@ -1422,9 +1426,12 @@ def api_set_tailscale_exit_node():
     """Switch Tailscale exit node."""
     body = request.get_json() or {}
     node_ip_or_name = body.get("exit_node", "").strip()
-    ok = TailscaleController.set_exit_node(node_ip_or_name if node_ip_or_name else None)
+    result = TailscaleController.set_exit_node(node_ip_or_name if node_ip_or_name else "")
     controller.pm.sync_from_db()
-    return jsonify({"success": ok, **TailscaleController.get_status()})
+    status = TailscaleController.get_status()
+    if not result.get("success"):
+        return jsonify({"success": False, "error": result.get("error", "Lỗi chuyển Exit Node"), "tailscale": status})
+    return jsonify({"success": True, "tailscale": status, **status})
 
 
 @app.route("/api/network/tailscale/disconnect", methods=["POST"])
@@ -1432,7 +1439,8 @@ def api_disconnect_tailscale():
     """Disconnect Tailscale."""
     ok = TailscaleController.disconnect()
     controller.pm.sync_from_db()
-    return jsonify({"success": ok, **TailscaleController.get_status()})
+    status = TailscaleController.get_status()
+    return jsonify({"success": ok, "tailscale": status, **status})
 
 
 @app.route("/api/network/fingerprints", methods=["GET"])
