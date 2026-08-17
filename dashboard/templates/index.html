@@ -486,18 +486,23 @@
             </div>
 
             <!-- Live Execution Log Terminal & Top Genres -->
-            <div class="card flex-1">
-              <div class="card-header">
+            <div class="card" style="display: flex; flex-direction: column; max-height: 460px; min-height: 280px;">
+              <div class="card-header" style="flex-shrink: 0;">
                 <div class="card-title">📜 Live Execution Log &amp; Phân Bổ Thể Loại</div>
-                <span class="text-dim" style="font-size: 10.5px;">WebSocket Telemetry</span>
+                <div class="flex-row" style="gap: 6px; width: auto;">
+                  <button id="btn-clear-console-log" class="btn btn-secondary" style="padding: 2px 7px; font-size: 10px; border-color: rgba(255,255,255,0.15);" title="Xóa màn hình log">
+                    🧹 Xóa Log
+                  </button>
+                  <span class="text-dim font-mono" style="font-size: 10px;">WebSocket Telemetry</span>
+                </div>
               </div>
 
-              <div class="card-body flex-1">
+              <div class="card-body" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; padding: 10px;">
                 <!-- Genre distribution mini-bars -->
-                <div id="genre-list" class="genre-list-box mb-4"></div>
+                <div id="genre-list" class="genre-list-box" style="margin-bottom: 6px; flex-shrink: 0; max-height: 90px; overflow-y: auto;"></div>
 
-                <!-- Console terminal -->
-                <div class="console-box flex-1" id="console-log">
+                <!-- Console terminal with capped height and smooth scroll -->
+                <div class="console-box" id="console-log" style="flex: 1; min-height: 140px; max-height: 240px; overflow-y: auto; margin-top: 4px;">
                   <div class="log-line"><span class="log-time">[System]</span><span class="log-info">Studio Dashboard initialized. Ready for operations.</span></div>
                 </div>
               </div>

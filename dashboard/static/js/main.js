@@ -229,6 +229,7 @@ socket.on("stats_update", (data) => {
 // ─── Helpers ─────────────────────────────────────────────────
 
 function appendLog(message, level = "info", timestamp = null) {
+  if (!consoleLog) return;
   const timeStr = timestamp || new Date().toLocaleTimeString();
   const line = document.createElement("div");
   line.className = "log-line";
@@ -244,7 +245,22 @@ function appendLog(message, level = "info", timestamp = null) {
   line.appendChild(timeSpan);
   line.appendChild(msgSpan);
   consoleLog.appendChild(line);
+
+  // Keep max 150 log lines to prevent page stretching and memory leaks
+  while (consoleLog.children.length > 150) {
+    consoleLog.removeChild(consoleLog.firstChild);
+  }
+
   consoleLog.scrollTop = consoleLog.scrollHeight;
+}
+
+const btnClearConsoleLog = document.getElementById("btn-clear-console-log");
+if (btnClearConsoleLog) {
+  btnClearConsoleLog.addEventListener("click", () => {
+    if (consoleLog) {
+      consoleLog.innerHTML = `<div class="log-line"><span class="log-time">[${new Date().toLocaleTimeString()}]</span><span class="log-info">Console cleared by user.</span></div>`;
+    }
+  });
 }
 
 function updateHealthBadge(health) {
