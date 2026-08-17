@@ -14,7 +14,7 @@ from src.storage.file_manager import FileManager
 from src.utils.session_manager import SessionManager
 from src.utils.proxy_manager import ProxyManager
 from src.utils.health_checker import HealthChecker
-from src.utils.lyrics_collector import LyricsCollector
+from src.collectors.lyrics_collector import LyricsCollector
 from src.utils.fingerprint_generator import FingerprintGenerator
 
 print("=" * 60)
