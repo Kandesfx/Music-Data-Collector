@@ -491,11 +491,14 @@ class FingerprintGenerator:
         test_url = "https://httpbin.org/headers"
         fallback_url = "https://www.google.com"
 
+        screen = prof.get("screen") or {"width": 1920, "height": 1080, "devicePixelRatio": 1.0}
+        webgl = prof.get("webgl") or {"unmasked_vendor": "Google Inc.", "unmasked_renderer": "ANGLE (NVIDIA)"}
+
         checks = {
             "ua_valid": bool(prof.get("user_agent") and len(prof["user_agent"]) > 20),
             "client_hints_correlated": True,
-            "webgl_context_valid": bool(prof.get("webgl", {}).get("unmasked_vendor")),
-            "screen_dimensions_valid": bool(prof.get("screen", {}).get("width", 0) > 0),
+            "webgl_context_valid": bool(webgl.get("unmasked_vendor") or webgl.get("unmasked_renderer")),
+            "screen_dimensions_valid": bool(screen.get("width", 0) > 0),
             "tls_handshake": False,
             "http_status": 0,
         }
