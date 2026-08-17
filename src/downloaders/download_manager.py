@@ -10,6 +10,7 @@ Orchestrates high-fidelity audio downloading with:
 import sys
 import time
 import uuid
+import threading
 import subprocess
 import shutil
 from pathlib import Path
