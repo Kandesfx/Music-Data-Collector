@@ -1369,6 +1369,28 @@ Khi triển khai hệ thống trên hạ tầng đám mây (Oracle Cloud Infrast
   - Khởi chạy Tailscale ở chế độ SOCKS5 Gateway trên cổng `127.0.0.1:1055` (`tailscale up --authkey=<key> --socks5-server=127.0.0.1:1055 --exit-node=<node>`).
   - Tự động nạp vào `db.proxies` và cho phép điều khiển, đổi Exit Node linh hoạt qua Web Dashboard (`/api/network/tailscale/*`).
 
+#### H. Quản Lý Hồ Sơ Tùy Chỉnh, Tự Động Pre-flight Test & Watchdog Giám Sát Mất Kết Nối
+- **Module:** [`src/storage/db_manager.py`](file:///d:/Hai/study/DATN/music-data-collector/src/storage/db_manager.py), [`src/utils/fingerprint_generator.py`](file:///d:/Hai/study/DATN/music-data-collector/src/utils/fingerprint_generator.py), [`src/downloaders/download_manager.py`](file:///d:/Hai/study/DATN/music-data-collector/src/downloaders/download_manager.py) & [`dashboard/app.py`](file:///d:/Hai/study/DATN/music-data-collector/dashboard/app.py).
+- **Tính năng nổi bật:**
+  1. **Thêm & Quản lý Hồ sơ Vân tay Tùy chỉnh (Custom Fingerprint Pool):**
+     - Cho phép người dùng tự tạo hoặc import các hồ sơ trình duyệt / thiết bị riêng (Tên, OS, Browser, User-Agent, WebGL GPU, Màn hình, CPU/RAM, InnerTube Client).
+     - Lưu trữ và đồng bộ hóa bền vững trên MongoDB (`db.fingerprint_profiles`), hỗ trợ gắn cờ `is_custom: True`, quản lý trạng thái `preflight_passed`, và cho phép xóa/sửa linh hoạt.
+  2. **Cơ chế Kiểm Thử Tự Động Trước Khi Sử Dụng (Pre-flight Automated Testing):**
+     - Khi người dùng thêm hồ sơ mới hoặc nhấn "Test & Kích Hoạt", hệ thống sẽ chạy active probe kiểm tra thực tế:
+       - Tính hợp lệ của chuỗi User-Agent.
+       - Tương quan nhất quán giữa Hệ điều hành và `Sec-CH-UA-Platform` Client Hints.
+       - Hợp lệ của WebGL context & Độ phân giải màn hình.
+       - Bắt tay TLS thực tế và đo lường độ trễ mạng chính xác (`ms`) qua endpoint Google/YouTube.
+     - Chỉ kích hoạt hồ sơ khi đạt chuẩn 100% (`status = verified`). Nếu không đạt chuẩn sẽ cảnh báo và chặn để tránh gây lỗi chuỗi tải nhạc.
+  3. **Watchdog Giám Sát Mất Kết Nối Thời Gian Thực (Network Health Watchdog):**
+     - Endpoint `/api/network/health_watchdog` định kỳ quét toàn bộ trạng thái kết nối: Internet gốc máy chủ, Cổng Cloudflare WARP SOCKS5 (`127.0.0.1:40000`), Tailscale Mesh Tunnel (`127.0.0.1:1055`), Proxy Pool, và YouTube CDN API.
+     - Khi phát hiện mất kết nối: Lập tức phát tín hiệu WebSocket `network_connection_lost`, hiển thị cảnh báo trực quan trên Dashboard và ghi nhật ký kiểm toán hệ thống.
+  4. **Khả Năng Chống Chịu Lỗi & Tự Động Chuyển Vùng Pipeline (Fault-Tolerant Fallback):**
+     - Khi `DownloadManager` gặp lỗi proxy chết, ngắt kết nối mạng hoặc bot challenge:
+       - Tự động ghi nhận thất bại của proxy đó (`ProxyManager.report_failure`).
+       - Tự động chuyển tiếp (failover) sang Proxy dự phòng hoặc cổng WARP Anycast.
+       - Tự động xoay sang hồ sơ vân tay trình duyệt tiếp theo và tiếp tục quy trình mà không làm sập pipeline.
+
 ---
 
 > **Ghi chú:** Tài liệu này đủ chi tiết để mỗi Task có thể được giao cho 1 agent độc lập triển khai. Mỗi agent chỉ cần đọc Task tương ứng + các Section reference để code mà không cần hỏi thêm.
