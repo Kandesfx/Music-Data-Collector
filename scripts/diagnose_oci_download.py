@@ -35,7 +35,7 @@ hc = HealthChecker()
 dm = DownloadManager(db, fm, sm, hc, pm)
 
 # Pick a track
-tracks = db.get_pending_tracks(limit=1)
+tracks = db.get_download_queue(limit=1)
 track = tracks[0] if tracks else {"spotify_id": "test_diagnose_1", "name": "Con Mua Ngang Qua", "artist_name": "Son Tung M-TP"}
 print(f"Target Track: '{track.get('name')}' by '{track.get('artist_name')}'")
 
