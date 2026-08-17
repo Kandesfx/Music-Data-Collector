@@ -108,10 +108,12 @@ class TrendManager:
     def _get_trending_playlists(self) -> List[Dict[str, Any]]:
         """Top curated Spotify / Web playlists."""
         return [
-            {"title": "Top 50 Việt Nam (Weekly)", "query": "https://open.spotify.com/playlist/37i9dQZEVXbLdGSmz6xilI", "genre": "vpop", "mode": "playlist", "icon": "🇻🇳"},
-            {"title": "Hot Hits Vietnam", "query": "https://open.spotify.com/playlist/37i9dQZF1DX0F4iogI5zct", "genre": "vpop", "mode": "playlist", "icon": "🔥"},
-            {"title": "Viral 50 Vietnam", "query": "https://open.spotify.com/playlist/37i9dQZEVXbL1G1Lz6y1xW", "genre": "vpop", "mode": "playlist", "icon": "📱"},
-            {"title": "Today's Top Hits (Global)", "query": "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M", "genre": "pop", "mode": "playlist", "icon": "🌍"},
-            {"title": "RapCaviar (Top Hip-Hop)", "query": "https://open.spotify.com/playlist/37i9dQZF1DX0XUsuxWHRQd", "genre": "hiphop", "mode": "playlist", "icon": "🎧"},
-            {"title": "Indie Việt Tuyển Chọn", "query": "https://open.spotify.com/playlist/37i9dQZF1DX1lVhptIYRda", "genre": "indie", "mode": "playlist", "icon": "🎸"},
+            {"title": "Top 50 Việt Nam (Weekly)", "query": "https://open.spotify.com/playlist/37i9dQZEVXbLdGSmz6xilI", "genre": "vpop", "mode": "playlist", "icon": "🇻🇳", "tag": "BXH TUẦN"},
+            {"title": "Hot Hits Vietnam", "query": "Hot Hits Vietnam", "genre": "vpop", "mode": "search", "icon": "🔥", "tag": "HOT V-POP"},
+            {"title": "Top 50 Toàn Cầu (Global Top 50)", "query": "https://open.spotify.com/playlist/37i9dQZEVXbMDoHDwVN2tF", "genre": "pop", "mode": "playlist", "icon": "🌍", "tag": "GLOBAL #1"},
+            {"title": "Today's Top Hits", "query": "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M", "genre": "pop", "mode": "playlist", "icon": "✨", "tag": "POP HITS"},
+            {"title": "RapCaviar (Top Hip-Hop)", "query": "https://open.spotify.com/playlist/37i9dQZF1DX0XUsuxWHRQd", "genre": "hiphop", "mode": "playlist", "icon": "🎧", "tag": "HIP-HOP"},
+            {"title": "Indie Việt Tuyển Chọn", "query": "https://open.spotify.com/playlist/37i9dQZF1DX1lVhptIYRda", "genre": "indie", "mode": "playlist", "icon": "🎸", "tag": "INDIE"},
+            {"title": "K-Pop ON! (Top K-Pop)", "query": "https://open.spotify.com/playlist/37i9dQZF1DX9tPFwDMOaN1", "genre": "kpop", "mode": "playlist", "icon": "🇰🇷", "tag": "K-POP"},
+            {"title": "V-Pop Nhạc Trẻ Hot", "query": "V-Pop Nhạc Trẻ", "genre": "vpop", "mode": "search", "icon": "🚀", "tag": "VIRAL"},
         ]

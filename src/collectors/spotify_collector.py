@@ -199,18 +199,39 @@ class SpotifyCollector:
             except Exception as e:
                 logger.warning(f"Official Spotify API playlist fetch failed ({e}). Switching to FreeSpotify...")
 
-        # 2. Fallback to FreeSpotify
+        # 2. Fallback to FreeSpotify (SpotDL Guest Engine)
         if self.free_sp:
             try:
-                res = self.free_sp.playlist(playlist_id)
-                raw_items = res.get("tracks", {}).get("items", [])
+                raw_items = []
+                # First try playlist_items
+                try:
+                    res_items = self.free_sp.playlist_items(playlist_id)
+                    if isinstance(res_items, dict):
+                        raw_items = res_items.get("items", [])
+                except Exception as e_items:
+                    logger.debug(f"FreeSpotify playlist_items notice: {e_items}")
+
+                # If playlist_items was empty, try playlist method
+                if not raw_items:
+                    res_pl = self.free_sp.playlist(playlist_id)
+                    if isinstance(res_pl, dict):
+                        raw_items = res_pl.get("tracks", {}).get("items", []) or res_pl.get("content", {}).get("items", [])
+
                 for it in raw_items[:max_tracks]:
                     t = it.get("track") if isinstance(it, dict) and "track" in it else it
                     clean_t = self._clean_track_dict(t, default_genre=default_genre)
                     if clean_t:
                         tracks.append(clean_t)
+                if tracks:
+                    return tracks
             except Exception as ex:
                 logger.error(f"FreeSpotify playlist fetch error: {ex}")
+
+        # 3. Fallback: If playlist URL/ID is private or restricted, search by genre / playlist phrase
+        if not tracks:
+            fallback_q = default_genre or "vpop hits"
+            logger.info(f"Fallback searching tracks for playlist with query '{fallback_q}'...")
+            return self.collect_by_keyword(fallback_q, max_tracks=max_tracks, default_genre=default_genre)
 
         return tracks
 
@@ -422,9 +443,33 @@ class SpotifyCollector:
             # Check if query is a playlist ID / URI or a text search phrase
             if "spotify" in query or (len(query) == 22 and " " not in query):
                 return self.collect_playlist_tracks(query, max_tracks=max_tracks, default_genre=default_genre)
-            else:
+            elif query:
                 # Text query entered under curated/playlist -> Smart fallback to search
                 return self.collect_by_keyword(query, max_tracks=max_tracks, default_genre=default_genre)
+            else:
+                # User chose curated with empty query -> fetch from curated playlists
+                playlists_path = settings.CONFIG_DIR / "playlists.json"
+                if not playlists_path.exists():
+                    playlists_path = settings.BASE_DIR / "config" / "playlists.json"
+                target_playlists = []
+                if playlists_path.exists():
+                    try:
+                        with open(playlists_path, "r", encoding="utf-8") as f:
+                            target_playlists = json.load(f).get("playlists", [])
+                    except Exception:
+                        pass
+
+                tracks = []
+                for pl in target_playlists:
+                    if default_genre and pl.get("genre") != default_genre:
+                        continue
+                    pl_tracks = self.collect_playlist_tracks(pl.get("url"), max_tracks=max_tracks, default_genre=pl.get("genre"))
+                    tracks.extend(pl_tracks)
+                    if len(tracks) >= max_tracks:
+                        break
+                if not tracks:
+                    tracks = self.collect_by_keyword(default_genre or "vpop hits", max_tracks=max_tracks, default_genre=default_genre)
+                return tracks[:max_tracks]
         else:
             # Default fallback
             return self.collect_by_keyword(query, max_tracks=max_tracks, default_genre=default_genre)
