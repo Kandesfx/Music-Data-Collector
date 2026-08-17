@@ -10,26 +10,27 @@ import shutil
 import subprocess
 import time
 from typing import Dict, Any, List, Optional
+from src.utils.lock_manager import lock_manager
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
 class TailscaleController:
-    """Controls Tailscale mesh network client and inspects exit node status."""
+    """Manages the Tailscale daemon and SOCKS5 proxy server for Exit Node egress routing."""
 
     DEFAULT_SOCKS5_PORT = 1055
     DEFAULT_PROXY_URL = f"socks5://127.0.0.1:{DEFAULT_SOCKS5_PORT}"
 
     @classmethod
     def is_installed(cls) -> bool:
-        """Check if tailscale CLI is installed on the host system."""
+        """Check if tailscale is installed on the host system."""
         return shutil.which("tailscale") is not None
 
     @classmethod
     def get_status(cls) -> Dict[str, Any]:
         """
-        Query current Tailscale connection status, Tailscale IPs, and available exit nodes.
+        Get current Tailscale connection status, local node IPs, and available Exit Nodes.
         """
         if not cls.is_installed():
             return {
@@ -38,7 +39,6 @@ class TailscaleController:
                 "is_connected": False,
                 "tailscale_ips": [],
                 "hostname": "",
-                "tailnet_name": "",
                 "active_exit_node": None,
                 "available_exit_nodes": [],
                 "socks5_port": cls.DEFAULT_SOCKS5_PORT,
@@ -55,19 +55,17 @@ class TailscaleController:
                 timeout=5,
             )
             if res.returncode != 0:
-                # Might be stopped or needs login
                 return {
                     "installed": True,
                     "status": "OFFLINE",
                     "is_connected": False,
                     "tailscale_ips": [],
                     "hostname": "",
-                    "tailnet_name": "",
                     "active_exit_node": None,
                     "available_exit_nodes": [],
                     "socks5_port": cls.DEFAULT_SOCKS5_PORT,
                     "proxy_url": cls.DEFAULT_PROXY_URL,
-                    "message": "Tailscale đang tắt hoặc cần đăng nhập (Needs Login).",
+                    "message": "Tailscale đang ở trạng thái dừng hoặc chưa đăng nhập.",
                 }
 
             data = json.loads(res.stdout) if res.stdout else {}
@@ -133,22 +131,8 @@ class TailscaleController:
             }
 
     @classmethod
-    def connect_with_auth_key(
-        cls,
-        auth_key: str,
-        exit_node: Optional[str] = None,
-        socks5_port: int = DEFAULT_SOCKS5_PORT,
-    ) -> Dict[str, Any]:
-        """
-        Authenticate Tailscale using an Auth Key (tskey-auth-...) and enable SOCKS5 server mode.
-        """
-        if not cls.is_installed():
-            return {"success": False, "error": "Tailscale chưa được cài đặt trên máy chủ"}
-
+    def _do_connect(cls, auth_key: str, exit_node: Optional[str], socks5_port: int) -> Dict[str, Any]:
         clean_key = auth_key.strip()
-        if not clean_key:
-            return {"success": False, "error": "Auth Key không được để trống!"}
-
         cmd = [
             "tailscale",
             "up",
@@ -157,34 +141,48 @@ class TailscaleController:
             "--accept-routes",
             "--reset",
         ]
-
         if exit_node and exit_node.strip():
             cmd.append(f"--exit-node={exit_node.strip()}")
             cmd.append("--exit-node-allow-lan-access=true")
 
-        try:
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=25)
-            if res.returncode != 0:
-                err_msg = (res.stderr or res.stdout).strip()
-                logger.error(f"Tailscale up failed: {err_msg}")
-                return {"success": False, "error": err_msg or "Lỗi kích hoạt Tailscale"}
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=25)
+        if res.returncode != 0:
+            err_msg = (res.stderr or res.stdout).strip()
+            logger.error(f"Tailscale up failed: {err_msg}")
+            return {"success": False, "error": err_msg or "Lỗi kích hoạt Tailscale"}
 
-            time.sleep(2)
-            status = cls.get_status()
-            logger.info(f"Tailscale connect success: {status.get('status')} IP: {status.get('primary_ip')}")
-            return {"success": True, "status": status}
+        time.sleep(2)
+        status = cls.get_status()
+        logger.info(f"Tailscale connect success: {status.get('status')} IP: {status.get('primary_ip')}")
+        return {"success": True, "status": status}
+
+    @classmethod
+    def connect_with_auth_key(
+        cls,
+        auth_key: str,
+        exit_node: Optional[str] = None,
+        socks5_port: int = DEFAULT_SOCKS5_PORT,
+    ) -> Dict[str, Any]:
+        """Authenticate Tailscale with CLI mutex lock."""
+        if not cls.is_installed():
+            return {"success": False, "error": "Tailscale chưa được cài đặt trên máy chủ"}
+        if not auth_key.strip():
+            return {"success": False, "error": "Auth Key không được để trống!"}
+
+        try:
+            return lock_manager.execute_with_cli_mutex(
+                "tailscale_cli_mutex",
+                cls._do_connect,
+                auth_key,
+                exit_node,
+                socks5_port,
+                timeout_sec=30,
+            )
         except Exception as e:
-            logger.error(f"Exception during Tailscale connect: {e}")
             return {"success": False, "error": str(e)}
 
     @classmethod
-    def set_exit_node(cls, exit_node_name_or_ip: str) -> Dict[str, Any]:
-        """
-        Dynamically change the active exit node in the tailnet.
-        """
-        if not cls.is_installed():
-            return {"success": False, "error": "Tailscale chưa được cài đặt trên máy chủ"}
-
+    def _do_set_exit_node(cls, exit_node_name_or_ip: str) -> Dict[str, Any]:
         clean_node = exit_node_name_or_ip.strip()
         cmd = ["tailscale", "set"]
         if clean_node:
@@ -193,28 +191,44 @@ class TailscaleController:
         else:
             cmd.append("--exit-node=")
 
-        try:
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15)
-            if res.returncode != 0:
-                err_msg = (res.stderr or res.stdout).strip()
-                return {"success": False, "error": err_msg}
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15)
+        if res.returncode != 0:
+            err_msg = (res.stderr or res.stdout).strip()
+            return {"success": False, "error": err_msg}
 
-            time.sleep(1)
-            status = cls.get_status()
-            return {"success": True, "status": status}
+        time.sleep(1)
+        status = cls.get_status()
+        return {"success": True, "status": status}
+
+    @classmethod
+    def set_exit_node(cls, exit_node_name_or_ip: str) -> Dict[str, Any]:
+        """Dynamically change active exit node with CLI mutex lock."""
+        if not cls.is_installed():
+            return {"success": False, "error": "Tailscale chưa được cài đặt trên máy chủ"}
+        try:
+            return lock_manager.execute_with_cli_mutex(
+                "tailscale_cli_mutex",
+                cls._do_set_exit_node,
+                exit_node_name_or_ip,
+                timeout_sec=20,
+            )
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     @classmethod
+    def _do_disconnect(cls) -> bool:
+        subprocess.run(["tailscale", "down"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+        time.sleep(1)
+        status = cls.get_status()
+        return not status["is_connected"]
+
+    @classmethod
     def disconnect(cls) -> bool:
-        """Disconnect Tailscale."""
+        """Disconnect Tailscale with CLI mutex lock."""
         if not cls.is_installed():
             return False
         try:
-            subprocess.run(["tailscale", "down"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
-            time.sleep(1)
-            status = cls.get_status()
-            return not status["is_connected"]
+            return lock_manager.execute_with_cli_mutex("tailscale_cli_mutex", cls._do_disconnect, timeout_sec=15)
         except Exception as e:
             logger.error(f"Tailscale disconnect failed: {e}")
             return False

@@ -35,6 +35,7 @@ from src.utils.cookie_checker import CookieHealthChecker
 from src.utils.warp_controller import WarpController
 from src.utils.tailscale_controller import TailscaleController
 from src.utils.fingerprint_generator import FingerprintGenerator
+from src.utils.lock_manager import lock_manager
 from src.utils.logger import get_logger
 
 logger = get_logger("dashboard")
@@ -76,6 +77,7 @@ class PipelineController:
             on_cookie_expired=self.handle_cookie_expired,
         )
         FingerprintGenerator.set_db_manager(self.db)
+        lock_manager.set_db_manager(self.db)
 
         self.is_running = False
         self.is_paused = False
@@ -108,11 +110,28 @@ class PipelineController:
         genre: Optional[str] = None,
         limit_per_playlist: int = 50,
         operator_name: str = "admin",
-    ):
-        """Run metadata crawling in background thread."""
-        if self.is_running:
-            self.log("A task is already running!", level="warning")
-            return
+    ) -> bool:
+        """Run metadata crawling in background thread with distributed pipeline lock."""
+        # 1. Acquire global pipeline execution lock
+        acquired, lock_info = lock_manager.acquire_lock(
+            lock_name="pipeline_global_lock",
+            owner=operator_name,
+            ttl_seconds=900,
+            metadata={"task": f"Crawl [{mode.upper()}]", "query": query, "started_by": operator_name}
+        )
+        if not acquired:
+            holder = lock_info.get("owner", "user khác") if lock_info else "user khác"
+            time_left = lock_info.get("time_left_sec", 0) if lock_info else 0
+            cur_task = lock_info.get("metadata", {}).get("task", "Tác vụ khác") if lock_info else "Tác vụ khác"
+            msg = f"⚠️ XUNG ĐỘT TIẾN TRÌNH: Đang có tác vụ '{cur_task}' chạy bởi @{holder} (khóa còn hiệu lực {time_left}s). Vui lòng đợi!"
+            self.log(msg, level="warning")
+            socketio.emit("pipeline_lock_conflict", {
+                "message": msg,
+                "holder": holder,
+                "time_left_sec": time_left,
+                "task": cur_task,
+            })
+            return False
 
         self.is_running = True
         self.should_stop = False
@@ -225,6 +244,7 @@ class PipelineController:
                 )
                 self.log(f"Crawl failed: {ex}", level="error")
             finally:
+                lock_manager.release_lock("pipeline_global_lock")
                 self.is_running = False
                 self.active_task_name = "Idle"
                 socketio.emit("task_status", {"task": "Idle", "running": False})
@@ -232,6 +252,7 @@ class PipelineController:
 
         self.worker_thread = threading.Thread(target=_crawl_worker, daemon=True)
         self.worker_thread.start()
+        return True
 
     def start_download_task(
         self,
@@ -240,11 +261,28 @@ class PipelineController:
         retry_failed: bool = False,
         operator_name: str = "admin",
         specific_ids: Optional[List[str]] = None,
-    ):
-        """Run audio download in background thread."""
-        if self.is_running:
-            self.log("A task is already running!", level="warning")
-            return
+    ) -> bool:
+        """Run audio download in background thread with distributed pipeline lock."""
+        # 1. Acquire global pipeline execution lock
+        acquired, lock_info = lock_manager.acquire_lock(
+            lock_name="pipeline_global_lock",
+            owner=operator_name,
+            ttl_seconds=900,
+            metadata={"task": "Downloading Audio", "count": limit, "started_by": operator_name}
+        )
+        if not acquired:
+            holder = lock_info.get("owner", "user khác") if lock_info else "user khác"
+            time_left = lock_info.get("time_left_sec", 0) if lock_info else 0
+            cur_task = lock_info.get("metadata", {}).get("task", "Tác vụ khác") if lock_info else "Tác vụ khác"
+            msg = f"⚠️ XUNG ĐỘT TIẾN TRÌNH: Đang có tác vụ '{cur_task}' chạy bởi @{holder} (khóa còn hiệu lực {time_left}s). Vui lòng đợi!"
+            self.log(msg, level="warning")
+            socketio.emit("pipeline_lock_conflict", {
+                "message": msg,
+                "holder": holder,
+                "time_left_sec": time_left,
+                "task": cur_task,
+            })
+            return False
 
         self.is_running = True
         self.should_stop = False
@@ -341,6 +379,7 @@ class PipelineController:
                 )
                 self.log(f"Download worker error: {ex}", level="error")
             finally:
+                lock_manager.release_lock("pipeline_global_lock")
                 self.is_running = False
                 self.active_task_name = "Idle"
                 socketio.emit("task_status", {"task": "Idle", "running": False})
@@ -348,6 +387,7 @@ class PipelineController:
 
         self.worker_thread = threading.Thread(target=_download_worker, daemon=True)
         self.worker_thread.start()
+        return True
 
     def pause(self):
         """Toggle pause state."""
@@ -357,10 +397,11 @@ class PipelineController:
         socketio.emit("control_state", {"is_paused": self.is_paused, "is_running": self.is_running})
 
     def stop(self):
-        """Trigger stop signal."""
+        """Trigger stop signal and release global pipeline lock."""
         self.should_stop = True
         self.is_running = False
-        self.log("Pipeline stop signal emitted.")
+        lock_manager.release_lock("pipeline_global_lock")
+        self.log("Pipeline stop signal emitted & global lock released.")
         socketio.emit("control_state", {"is_paused": False, "is_running": False})
 
     def toggle_proxy(self, enable: bool):
@@ -1519,6 +1560,50 @@ def get_stats():
             "current_user": session.get("user"),
         }
     )
+
+
+# ─── Concurrency & System Lock REST Endpoints ───────────────
+
+@app.route("/api/system/locks", methods=["GET"])
+def api_get_system_locks():
+    """Retrieve all active concurrency locks and their remaining TTL lease time."""
+    now = datetime.utcnow()
+    locks = []
+    if controller.db.is_connected():
+        try:
+            for doc in controller.db.db.system_locks.find({}, {"_id": 0}):
+                exp = doc.get("expires_at")
+                if exp and exp > now:
+                    doc["time_left_sec"] = int((exp - now).total_seconds())
+                    locks.append(doc)
+        except Exception:
+            pass
+
+    return jsonify({
+        "success": True,
+        "locks": locks,
+        "total": len(locks),
+        "pipeline_running": controller.is_running,
+        "active_task": controller.active_task_name,
+    })
+
+
+@app.route("/api/system/locks/force_unlock", methods=["POST"])
+def api_force_unlock():
+    """Force release an active system lock in case of emergency (Admin only)."""
+    user = session.get("user")
+    if not user or user.get("role") != "admin":
+        return jsonify({"success": False, "error": "Chỉ Quản trị viên mới có quyền mở khóa cưỡng bức!"}), 403
+
+    body = request.get_json() or {}
+    lock_name = body.get("lock_name", "pipeline_global_lock")
+    lock_manager.release_lock(lock_name)
+    controller.is_running = False
+    controller.active_task_name = "Idle"
+    socketio.emit("task_status", {"task": "Idle", "running": False})
+    controller.broadcast_stats()
+    controller.log(f"🔓 Quản trị viên @{user.get('username')} đã cưỡng bức giải phóng khóa '{lock_name}'.", level="warning")
+    return jsonify({"success": True, "message": f"Đã giải phóng khóa '{lock_name}' thành công!"})
 
 
 # ─── WebSocket Events ────────────────────────────────────────

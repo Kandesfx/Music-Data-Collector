@@ -3020,6 +3020,19 @@ socket.on("track_redownloaded", (data) => {
   }
 });
 
+// Socket listener for multi-user pipeline lock conflicts & deadlock prevention
+socket.on("pipeline_lock_conflict", (data) => {
+  const holder = data.holder || "Người dùng khác";
+  const task = data.task || "Tác vụ đang chạy";
+  const timeLeft = data.time_left_sec || 0;
+  const msg = `🔒 XUNG ĐỘT TÀI NGUYÊN: ${task} đang được thực thi bởi @${holder} (khóa còn ${timeLeft}s). Vui lòng đợi tiến trình hoàn thành hoặc nhờ Quản trị viên can thiệp!`;
+  
+  if (typeof appendLog === "function") {
+    appendLog(msg, "warning");
+  }
+  alert(msg);
+});
+
 // ─── Main Workspace Tab Navigation (Sourcing ↔ Catalog ↔ Full Logs Studio) ──
 (function initMainTabs() {
   const btnSourcing = document.getElementById("nav-btn-sourcing");

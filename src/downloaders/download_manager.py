@@ -9,6 +9,7 @@ Orchestrates high-fidelity audio downloading with:
 
 import sys
 import time
+import uuid
 import subprocess
 import shutil
 from pathlib import Path
@@ -27,6 +28,7 @@ from src.utils.cookie_checker import CookieHealthChecker
 from src.utils.health_checker import HealthChecker
 from src.utils.session_manager import SessionManager
 from src.utils.proxy_manager import ProxyManager
+from src.utils.lock_manager import lock_manager
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -104,9 +106,40 @@ class DownloadManager:
                 self.health_checker.record(True)
                 return True, str(target_path), "cached"
 
-        # Temporary folder for download staging
-        temp_dir = settings.DATA_DIR / "temp" / spotify_id
+        # Acquire atomic per-track lock to prevent concurrent collisions on the same audio file
+        worker_id = f"worker_{session_id or 'single'}_{uuid.uuid4().hex[:4]}"
+        if not lock_manager.acquire_track_download_lock(spotify_id, owner=worker_id, ttl_seconds=180):
+            logger.warning(f"🔒 Track {artist} - {title} ({spotify_id}) is currently being processed by another worker. Skipping collision.")
+            return False, None, "Track is currently locked by another worker."
+
+        # Unique isolated temporary directory
+        temp_dir = settings.DATA_DIR / "temp" / f"{spotify_id}_{uuid.uuid4().hex[:6]}"
         temp_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            return self._execute_track_download(
+                track=track,
+                target_path=target_path,
+                temp_dir=temp_dir,
+                session_id=session_id,
+            )
+        finally:
+            lock_manager.release_track_download_lock(spotify_id, owner=worker_id)
+
+    def _execute_track_download(
+        self,
+        track: Dict[str, Any],
+        target_path: Path,
+        temp_dir: Path,
+        session_id: Optional[int] = None,
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        """Internal execution of track download within secured lock boundary."""
+        spotify_id = track.get("spotify_id")
+        title = track.get("name", "")
+        artist = track.get("artist_name", "")
+        album = track.get("album_name", "")
+        duration_ms = track.get("duration_ms")
+        spotify_url = track.get("spotify_url") or f"https://open.spotify.com/track/{spotify_id}"
 
         downloaded_file: Optional[Path] = None
         method_used: Optional[str] = None

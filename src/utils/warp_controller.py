@@ -9,6 +9,7 @@ import shutil
 import time
 import requests
 from typing import Dict, Any, Optional
+from src.utils.lock_manager import lock_manager
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -77,31 +78,39 @@ class WarpController:
             }
 
     @classmethod
+    def _do_connect(cls) -> bool:
+        subprocess.run(["warp-cli", "--accept-tos", "connect"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+        time.sleep(1)
+        status = cls.get_status()
+        logger.info(f"Cloudflare WARP connect result: {status['status']}")
+        return status["is_connected"]
+
+    @classmethod
     def connect(cls) -> bool:
-        """Connect to Cloudflare WARP."""
+        """Connect to Cloudflare WARP with process serialization mutex."""
         if not cls.is_installed():
             return False
         try:
-            subprocess.run(["warp-cli", "--accept-tos", "connect"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
-            time.sleep(1)
-            status = cls.get_status()
-            logger.info(f"Cloudflare WARP connect result: {status['status']}")
-            return status["is_connected"]
+            return lock_manager.execute_with_cli_mutex("warp_cli_mutex", cls._do_connect, timeout_sec=12)
         except Exception as e:
             logger.error(f"Failed to connect Cloudflare WARP: {e}")
             return False
 
     @classmethod
+    def _do_disconnect(cls) -> bool:
+        subprocess.run(["warp-cli", "--accept-tos", "disconnect"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+        time.sleep(1)
+        status = cls.get_status()
+        logger.info(f"Cloudflare WARP disconnect result: {status['status']}")
+        return not status["is_connected"]
+
+    @classmethod
     def disconnect(cls) -> bool:
-        """Disconnect Cloudflare WARP."""
+        """Disconnect Cloudflare WARP with process serialization mutex."""
         if not cls.is_installed():
             return False
         try:
-            subprocess.run(["warp-cli", "--accept-tos", "disconnect"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
-            time.sleep(1)
-            status = cls.get_status()
-            logger.info(f"Cloudflare WARP disconnect result: {status['status']}")
-            return not status["is_connected"]
+            return lock_manager.execute_with_cli_mutex("warp_cli_mutex", cls._do_disconnect, timeout_sec=12)
         except Exception as e:
             logger.error(f"Failed to disconnect Cloudflare WARP: {e}")
             return False

@@ -1391,7 +1391,26 @@ Khi triển khai hệ thống trên hạ tầng đám mây (Oracle Cloud Infrast
        - Tự động chuyển tiếp (failover) sang Proxy dự phòng hoặc cổng WARP Anycast.
        - Tự động xoay sang hồ sơ vân tay trình duyệt tiếp theo và tiếp tục quy trình mà không làm sập pipeline.
 
+#### I. Cơ Chế Ràng Buộc Lỗi Toàn Diện, Chống Xung Đột & Triệt Tiêu Deadlock Đa Người Dùng (Lock & Concurrency Engine)
+- **Module:** [`src/utils/lock_manager.py`](file:///d:/Hai/study/DATN/music-data-collector/src/utils/lock_manager.py), [`src/downloaders/download_manager.py`](file:///d:/Hai/study/DATN/music-data-collector/src/downloaders/download_manager.py), [`src/utils/warp_controller.py`](file:///d:/Hai/study/DATN/music-data-collector/src/utils/warp_controller.py), [`src/utils/tailscale_controller.py`](file:///d:/Hai/study/DATN/music-data-collector/src/utils/tailscale_controller.py), [`dashboard/app.py`](file:///d:/Hai/study/DATN/music-data-collector/dashboard/app.py).
+- **Tính năng nổi bật:**
+  1. **Khóa Tiến Trình Toàn Cục (Global Pipeline Execution Lock):**
+     - Quản lý trạng thái khóa cào/tải dữ liệu qua MongoDB `db.system_locks` kết hợp Memory `RLock`.
+     - Ngăn ngừa tình trạng 2 người dùng cùng lúc bấm chạy tác vụ gây tranh chấp tài nguyên (Race Condition), tự động trả về cảnh báo HTTP 409 và phát WebSocket `pipeline_lock_conflict` với tên người đang chạy và thời gian còn lại.
+  2. **Khóa Nguyên Tử Từng Bài Hát (Per-Track Atomic Download Lock):**
+     - Đảm bảo một bài hát (`spotify_id`) tại một thời điểm chỉ được tải bởi đúng 1 Worker Thread.
+     - Sử dụng thư mục tạm cô lập theo UUID (`data/temp/{spotify_id}_{uuid}`) loại bỏ hoàn toàn lỗi tranh chấp file đĩa (`PermissionError` / File Collision) khi nhiều luồng cùng chạy.
+  3. **Khóa Mutex Lệnh Phần Cứng & OS CLI (Hardware / CLI Execution Mutex):**
+     - Tuần tự hóa các lệnh điều khiển mạng cấp thấp (`warp-cli connect/disconnect`, `tailscale up/set/down`) qua `execute_with_cli_mutex`, ngăn ngừa xung đột tiến trình hệ điều hành và tránh treo máy chủ.
+  4. **Tự Động Thu Hồi Khóa Quá Hạn & Chống Deadlock (Self-Healing Stale Lock Reclamation):**
+     - Mọi khóa đều có thời gian thuê (Lease TTL: 180s cho bài hát, 900s cho Pipeline).
+     - Nếu máy chủ bị tắt đột ngột hoặc Worker bị crash, hệ thống sẽ tự động phát hiện và giải phóng các khóa quá hạn (*Stale Locks*), không bao giờ để xảy ra tình trạng Deadlock đóng băng hệ thống.
+  5. **Giao Diện & API Quản Trị Khóa Hệ Thống:**
+     - Endpoint `GET /api/system/locks` cho phép theo dõi thời gian thực các tác vụ đang chiếm giữ khóa.
+     - Endpoint `POST /api/system/locks/force_unlock` hỗ trợ Quản trị viên can thiệp mở khóa cưỡng bức trong các tình huống khẩn cấp.
+
 ---
 
 > **Ghi chú:** Tài liệu này đủ chi tiết để mỗi Task có thể được giao cho 1 agent độc lập triển khai. Mỗi agent chỉ cần đọc Task tương ứng + các Section reference để code mà không cần hỏi thêm.
+
 
