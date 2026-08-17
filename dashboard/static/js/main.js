@@ -4827,24 +4827,13 @@ socket.on("track_redownloaded", (data) => {
 })();
 
 // ─── Interactive System Guide Modal Controller ──────────────
+// ─── Interactive System Guide Modal Controller ──────────────
 (function initGuideModal() {
-  const guideModal = document.getElementById("guide-modal");
-  const guideTabBtns = document.querySelectorAll(".guide-tab-btn");
-  const guideTabContents = document.querySelectorAll(".guide-tab-content");
-
-  window.openGuideModal = function(targetTab = "tab-guide-overview") {
-    if (guideModal) {
-      guideModal.style.display = "flex";
-      switchGuideTab(targetTab);
-    }
-  };
-
-  window.closeGuideModal = function() {
-    if (guideModal) guideModal.style.display = "none";
-  };
-
   function switchGuideTab(tabId) {
-    guideTabBtns.forEach(btn => {
+    const btns = document.querySelectorAll(".guide-tab-btn");
+    const contents = document.querySelectorAll(".guide-tab-content");
+
+    btns.forEach(btn => {
       if (btn.getAttribute("data-tab") === tabId) {
         btn.classList.add("btn-primary");
         btn.classList.remove("btn-secondary");
@@ -4854,7 +4843,7 @@ socket.on("track_redownloaded", (data) => {
       }
     });
 
-    guideTabContents.forEach(c => {
+    contents.forEach(c => {
       if (c.id === tabId) {
         c.style.display = "flex";
       } else {
@@ -4863,17 +4852,31 @@ socket.on("track_redownloaded", (data) => {
     });
   }
 
-  guideTabBtns.forEach(btn => {
-    btn.addEventListener("click", () => {
-      const tabId = btn.getAttribute("data-tab");
-      switchGuideTab(tabId);
-    });
-  });
+  window.openGuideModal = function(targetTab = "tab-guide-overview") {
+    const modal = document.getElementById("guide-modal");
+    if (modal) {
+      modal.style.display = "flex";
+      switchGuideTab(targetTab);
+    }
+  };
 
-  if (guideModal) {
-    guideModal.addEventListener("click", (e) => {
-      if (e.target === guideModal) window.closeGuideModal();
-    });
-  }
+  window.closeGuideModal = function() {
+    const modal = document.getElementById("guide-modal");
+    if (modal) modal.style.display = "none";
+  };
+
+  document.addEventListener("click", (e) => {
+    const tabBtn = e.target.closest(".guide-tab-btn");
+    if (tabBtn) {
+      const tabId = tabBtn.getAttribute("data-tab");
+      if (tabId) switchGuideTab(tabId);
+    }
+
+    const modal = document.getElementById("guide-modal");
+    if (modal && e.target === modal) {
+      window.closeGuideModal();
+    }
+  });
 })();
+
 

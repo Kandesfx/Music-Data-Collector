@@ -2287,162 +2287,287 @@
 
   <!-- Modal 11: Interactive System & Config Guide Modal -->
   <div id="guide-modal" class="modal-overlay">
-    <div class="modal-container large" style="max-width: 1040px; width: 95vw;">
-      <div class="modal-header" style="background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.15));">
+    <div class="modal-container large" style="max-width: 1100px; width: 95vw; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header" style="background: linear-gradient(135deg, rgba(16,185,129,0.2), rgba(6,182,212,0.2)); border-bottom: 1px solid rgba(16,185,129,0.3); padding: 14px 20px;">
         <div>
-          <div class="modal-title text-green" style="font-size: 15px; display: flex; align-items: center; gap: 8px;">
-            <span>❓</span> HƯỚNG DẪN SỬ DỤNG HỆ THỐNG &amp; CẤU HÌNH CHI TIẾT (A - Z)
+          <div class="modal-title text-green" style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+            <span>📖</span> HƯỚNG DẪN SỬ DỤNG HỆ THỐNG &amp; CẤU HÌNH CHI TIẾT (A - Z)
           </div>
-          <div class="modal-subtitle">Tài liệu chỉ dẫn từng bước dành cho thành viên mới: Từ lấy cấu hình API, Cookie, Proxy, Tailscale đến quy trình vận hành cào tải chuẩn phòng thu</div>
+          <div class="modal-subtitle" style="font-size: 11.5px; color: var(--text-dim); margin-top: 2px;">
+            Tài liệu hướng dẫn trực quan dành cho thành viên nhóm Đồ Án Tốt Nghiệp: Quy trình cào tải 320k, lấy API Key, Cookie, Tailscale Mesh và vận hành hệ thống
+          </div>
         </div>
-        <button id="btn-close-guide-modal" class="modal-close" onclick="window.closeGuideModal()">✕</button>
+        <button id="btn-close-guide-modal" class="modal-close" onclick="window.closeGuideModal()" style="font-size: 18px;">✕</button>
       </div>
 
       <!-- Guide Tab Navigation -->
-      <div class="flex-row" style="background: var(--bg-card-header); padding: 8px 16px; border-bottom: 1px solid var(--border-color); gap: 6px; overflow-x: auto;">
-        <button class="guide-tab-btn btn btn-primary" data-tab="tab-guide-overview" style="font-size: 11px;">🚀 1. Tổng Quan &amp; Luồng Chạy</button>
-        <button class="guide-tab-btn btn btn-secondary" data-tab="tab-guide-spotify" style="font-size: 11px;">🎵 2. Lấy Config Spotify &amp; SP_DC</button>
-        <button class="guide-tab-btn btn btn-secondary" data-tab="tab-guide-youtube" style="font-size: 11px;">🍪 3. Lấy Cookie YouTube Netscape</button>
-        <button class="guide-tab-btn btn btn-secondary" data-tab="tab-guide-tailscale" style="font-size: 11px; color: var(--accent-purple); border-color: var(--accent-purple);">💻 4. Tự Dựng Tailscale Exit Node</button>
-        <button class="guide-tab-btn btn btn-secondary" data-tab="tab-guide-warp" style="font-size: 11px;">🛡️ 5. Cloudflare WARP &amp; Proxy Pool</button>
-        <button class="guide-tab-btn btn btn-secondary" data-tab="tab-guide-team" style="font-size: 11px;">👥 6. Phân Quyền &amp; Thành Viên</button>
+      <div class="flex-row" style="background: var(--bg-card-header); padding: 10px 18px; border-bottom: 1px solid var(--border-color); gap: 8px; overflow-x: auto; flex-shrink: 0;">
+        <button class="guide-tab-btn btn btn-primary" data-tab="tab-guide-overview" style="font-size: 11.5px; font-weight: 700; padding: 6px 14px;">🚀 1. Tổng Quan &amp; Luồng Hoạt Động</button>
+        <button class="guide-tab-btn btn btn-secondary" data-tab="tab-guide-spotify" style="font-size: 11.5px; padding: 6px 14px;">🎵 2. Lấy Config Spotify &amp; SP_DC</button>
+        <button class="guide-tab-btn btn btn-secondary" data-tab="tab-guide-youtube" style="font-size: 11.5px; padding: 6px 14px;">🍪 3. Lấy Cookie YouTube Netscape</button>
+        <button class="guide-tab-btn btn btn-secondary" data-tab="tab-guide-tailscale" style="font-size: 11.5px; padding: 6px 14px; color: var(--accent-purple); border-color: var(--accent-purple);">💻 4. Tự Dựng Tailscale Exit Node</button>
+        <button class="guide-tab-btn btn btn-secondary" data-tab="tab-guide-warp" style="font-size: 11.5px; padding: 6px 14px;">🛡️ 5. Cloudflare WARP &amp; Proxy Pool</button>
+        <button class="guide-tab-btn btn btn-secondary" data-tab="tab-guide-team" style="font-size: 11.5px; padding: 6px 14px;">👥 6. Phân Quyền &amp; Thành Viên</button>
       </div>
 
-      <div class="modal-body flex-col" style="gap: 14px; max-height: 520px; overflow-y: auto; padding: 18px 22px;">
+      <div class="modal-body flex-col" style="gap: 16px; overflow-y: auto; padding: 20px 24px; flex: 1;">
         
-        <!-- Tab 1: Overview -->
-        <div id="tab-guide-overview" class="guide-tab-content flex-col" style="gap: 12px;">
-          <div style="font-weight: 700; color: var(--accent-green); font-size: 14px;">
-            🌟 QUY TRÌNH THU THẬP &amp; XỬ LÝ ÂM NHẠC CHUẨN PHÒNG THU (4 BƯỚC):
-          </div>
-          <div class="grid-2" style="gap: 10px;">
-            <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px;">
-              <div style="font-weight: 700; color: var(--accent-cyan); font-size: 12px;">Bước 1: Sourcing (Cào Metadata)</div>
-              <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 4px; line-height: 1.5;">
-                Vào mục <b>Sourcing Studio</b> hoặc <b>Trend Sourcing</b> ➡️ Dán Link Playlist Spotify hoặc chọn nghệ sĩ ➡️ Bấm <b>Cào Dữ Liệu</b>. Hệ thống lấy tên bài, ca sĩ, album, ảnh bìa HD và thể loại.
-              </div>
+        <!-- Tab 1: Comprehensive Overview -->
+        <div id="tab-guide-overview" class="guide-tab-content flex-col" style="gap: 16px; display: flex;">
+          
+          <!-- Box 1: Sứ mệnh & Tiêu chuẩn chất lượng -->
+          <div style="background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(6,182,212,0.08)); border: 1px solid rgba(16,185,129,0.3); border-radius: var(--radius-md); padding: 14px 18px;">
+            <div style="font-weight: 800; color: var(--accent-green); font-size: 14px; display: flex; align-items: center; gap: 8px;">
+              <span>🎯</span> SỨ MỆNH HỆ THỐNG &amp; TIÊU CHUẨN ĐẦU RA PHÒNG THU:
             </div>
-            <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px;">
-              <div style="font-weight: 700; color: var(--accent-green); font-size: 12px;">Bước 2: Pipeline Download (320kbps MP3)</div>
-              <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 4px; line-height: 1.5;">
-                Vào mục <b>Pipeline Thu Thập</b> ➡️ Bấm <b>Bắt Đầu Tải Hàng Loạt</b>. Động cơ YTMusic Precision Matcher tự động lọc bản thu studio chính thức, loại bỏ MV thoại/hát live.
-              </div>
-            </div>
-            <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px;">
-              <div style="font-weight: 700; color: var(--accent-purple); font-size: 12px;">Bước 3: Lời Karaoke .lrc &amp; Thẻ ID3</div>
-              <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 4px; line-height: 1.5;">
-                Hệ thống tự động trích xuất lời đồng bộ mili-giây từ LRCLIB sinh file <code>.lrc</code> cạnh file MP3 và nhúng thẻ ID3v2.3 (APIC, USLT) vào audio.
-              </div>
-            </div>
-            <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px;">
-              <div style="font-weight: 700; color: #f59e0b; font-size: 12px;">Bước 4: Data Catalog &amp; Export Seed</div>
-              <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 4px; line-height: 1.5;">
-                Vào <b>Data Catalog</b> để nghe nhạc thử với Web Player trực quan, kiểm tra lời karaoke, hoặc vào <b>Dữ Liệu Xuất</b> để tải file SQL / JSON nạp vào web nghe nhạc ĐATN.
-              </div>
+            <div style="font-size: 12px; color: var(--text-main); margin-top: 6px; line-height: 1.65;">
+              <b>Music Data Collector Studio</b> là hệ thống tự động hóa khép kín (ETL Pipeline) được thiết kế phục vụ trực tiếp cho đề tài Đồ Án Tốt Nghiệp: <i>"Xây dựng Hệ Thống Nghe Nhạc Trực Tuyến Streaming"</i>. Dữ liệu đầu ra đáp ứng 100% tiêu chuẩn thương mại:
+              <ul style="margin: 6px 0 0 18px; padding: 0;">
+                <li><b>Chất lượng Audio:</b> File MP3 Bitrate cao nhất <b>320 kbps</b> chuẩn phòng thu (loại bỏ sạch tạp âm, tiếng nói mở đầu MV, bản hát live, cover).</li>
+                <li><b>Lời bài hát đồng bộ (Karaoke):</b> Tự động xuất file <code>.lrc</code> từng mili-giây cạnh file MP3 để phát chữ chạy theo nhạc trên Web App.</li>
+                <li><b>Thẻ Metadata ID3v2.3:</b> Tự động nhúng ảnh bìa HD (640x640), lời bài hát, ca sĩ, album, năm phát hành vào thẻ ID3 bên trong file MP3.</li>
+                <li><b>Dữ liệu Seed sẵn sàng:</b> Tự động tạo file SQL (`tracks_seed.sql`) và JSON để nạp thẳng vào cơ sở dữ liệu của Web nghe nhạc.</li>
+              </ul>
             </div>
           </div>
+
+          <!-- Box 2: 5 Giai đoạn vận hành chi tiết -->
+          <div style="font-weight: 800; color: var(--accent-cyan); font-size: 13.5px; display: flex; align-items: center; gap: 6px;">
+            <span>🔄</span> QUY TRÌNH VẬN HÀNH 5 GIAI ĐOẠN KHÉP KÍN (CHI TIẾT TỪNG BƯỚC):
+          </div>
+
+          <div class="grid-2" style="gap: 12px;">
+            
+            <!-- Giai đoạn 1 -->
+            <div style="background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px;">
+              <div style="font-weight: 700; color: var(--accent-cyan); font-size: 12.5px; display: flex; align-items: center; gap: 6px;">
+                <span>🕷️</span> Giai đoạn 1: Sourcing (Cào Siêu Dữ Liệu Metadata)
+              </div>
+              <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 6px; line-height: 1.6;">
+                • <b>Cách thực hiện:</b> Vào tab <b>Sourcing Studio</b> hoặc <b>Trend Sourcing</b> ➡️ Dán Link Playlist/Album Spotify hoặc chọn Nghệ sĩ ➡️ Bấm <b>Cào Dữ Liệu</b>.<br>
+                • <b>Dữ liệu thu được:</b> Tên bài hát, Nghệ sĩ chính, Ca sĩ kết hợp (Feat), Tên Album, Ảnh bìa HD (640x640), Năm phát hành, Popularity, Thời lượng chuẩn.<br>
+                • <b>Chuẩn hóa thể loại:</b> Tự động map sang 10 thể loại chính (Pop, V-Pop, Ballad, Indie, Rock, Hip-Hop, R&amp;B, EDM, Acoustic, Jazz).
+              </div>
+            </div>
+
+            <!-- Giai đoạn 2 -->
+            <div style="background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px;">
+              <div style="font-weight: 700; color: var(--accent-green); font-size: 12.5px; display: flex; align-items: center; gap: 6px;">
+                <span>🎯</span> Giai đoạn 2: Studio Audio Matching (So Khớp Chuẩn)
+              </div>
+              <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 6px; line-height: 1.6;">
+                • <b>Thuật toán so khớp thông minh:</b> Truy vấn YouTube Music để tìm chính xác bản <i>Official Studio Audio / Album Track</i>.<br>
+                • <b>Loại bỏ nhiễu 100%:</b> Loại bỏ các MV ca nhạc có thoại mở đầu/kết thúc dài 30s-1p, bản diễn Live tại concert, Fan cover, Parody.<br>
+                • <b>Kiểm tra sai số:</b> Bắt buộc độ lệch thời lượng $\le 2$ giây so với bản gốc Spotify.
+              </div>
+            </div>
+
+            <!-- Giai đoạn 3 -->
+            <div style="background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px;">
+              <div style="font-weight: 700; color: var(--accent-purple); font-size: 12.5px; display: flex; align-items: center; gap: 6px;">
+                <span>⚡</span> Giai đoạn 3: Download Siêu Tốc &amp; Lời Karaoke .lrc
+              </div>
+              <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 6px; line-height: 1.6;">
+                • <b>Tốc độ tải:</b> 3 – 6 giây / bài hát với bitrate cao nhất <b>320 kbps MP3</b> thông qua Cloudflare WARP Shield hoặc Tailscale.<br>
+                • <b>Lấy Lời Karaoke .lrc:</b> Tự động gọi LRCLIB API lấy lời đồng bộ mili-giây (dạng <code>[00:15.20] Lời bài hát...</code>) và lưu thành file <code>.lrc</code> cùng tên với file MP3.<br>
+                • <b>Nhúng Thẻ ID3:</b> Dùng <code>mutagen</code> nhúng ảnh bìa HD, lời bài hát, nghệ sĩ vào thẳng file MP3.
+              </div>
+            </div>
+
+            <!-- Giai đoạn 4 -->
+            <div style="background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px;">
+              <div style="font-weight: 700; color: #f59e0b; font-size: 12.5px; display: flex; align-items: center; gap: 6px;">
+                <span>💾</span> Giai đoạn 4: Data Catalog, Nghe Thử &amp; Xuất Seed
+              </div>
+              <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 6px; line-height: 1.6;">
+                • <b>Nghe thử trực tiếp:</b> Vào mục <b>Data Catalog</b> để nghe nhạc thử trên Web Audio Player với thanh sóng visualizer và xem lời bài hát.<br>
+                • <b>Xuất dữ liệu nạp Web:</b> Vào mục <b>Dữ Liệu Xuất</b> ➡️ Bấm <b>Xuất SQL &amp; JSON Seed</b> để tải về file <code>insert_seed.sql</code> nạp ngay vào cơ sở dữ liệu trang web nghe nhạc ĐATN!
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Box 3: Bảng Giải Thích Thuật Ngữ Kỹ Thuật -->
+          <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px;">
+            <div style="font-weight: 700; color: var(--text-main); font-size: 12.5px; margin-bottom: 8px;">
+              📚 BẢNG GIẢI THÍCH CÁC THUẬT NGỮ &amp; THÔNG SỐ KỸ THUẬT DÀNH CHO NGƯỜI MỚI:
+            </div>
+            <div class="table-responsive">
+              <table class="data-table" style="font-size: 11.5px;">
+                <thead>
+                  <tr>
+                    <th style="width: 180px;">Thuật Ngữ / Khái Niệm</th>
+                    <th>Ý Nghĩa &amp; Tác Dụng Trong Hệ Thống</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><b>320 kbps MP3</b></td>
+                    <td>Chất lượng nén âm thanh cao nhất của định dạng MP3 (tần số lấy mẫu 44.1kHz / 48kHz), cho âm thanh trong trẻo, tiếng bass/treble rõ nét chuẩn phòng thu.</td>
+                  </tr>
+                  <tr>
+                    <td><b>File Lời Đồng Bộ (.lrc)</b></td>
+                    <td>File văn bản chứa lời bài hát kèm mốc thời gian (Timestamp) từng câu. Giúp Web App nghe nhạc chạy chữ Karaoke đổi màu theo đúng nhịp bài hát.</td>
+                  </tr>
+                  <tr>
+                    <td><b>Thẻ ID3v2.3 (APIC, USLT)</b></td>
+                    <td>Thẻ siêu dữ liệu được nhúng trực tiếp vào trong ruột file MP3 (chứa ảnh bìa Album HD, Lời bài hát không đồng bộ, Tên ca sĩ, Tên Album). Mọi phần mềm nghe nhạc (Windows Media Player, iPhone, Android, Web) đều đọc được ngay.</td>
+                  </tr>
+                  <tr>
+                    <td><b>Cloudflare WARP (SOCKS5)</b></td>
+                    <td>Cổng chuyển tiếp lưu lượng mạng Anycast miễn phí của Cloudflare chạy trên cổng <code>127.0.0.1:40000</code>, giúp ẩn hoàn toàn IP máy chủ Oracle Datacenter để tải nhạc mượt mà không bị chặn.</td>
+                  </tr>
+                  <tr>
+                    <td><b>Tailscale Exit Node</b></td>
+                    <td>Đường hầm mã hóa WireGuard nối từ máy chủ Oracle về máy tính cá nhân ở nhà bạn, giúp hệ thống tải nhạc bằng chính đường truyền mạng gia đình (IP VNPT/Viettel/FPT).</td>
+                  </tr>
+                  <tr>
+                    <td><b>Active Cookie Health Probe</b></td>
+                    <td>Cơ chế tự động kiểm tra trực tiếp xem Cookie YouTube còn sống hay không khi gặp lỗi tải, ngăn chặn việc báo lỗi nhầm khi gặp video bị thử nghiệm Bot-check.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
 
         <!-- Tab 2: Spotify Guide -->
-        <div id="tab-guide-spotify" class="guide-tab-content flex-col" style="display: none; gap: 12px;">
-          <div style="font-weight: 700; color: var(--accent-green); font-size: 13.5px;">
-            🔑 HƯỚNG DẪN LẤY SPOTIFY CLIENT ID, CLIENT SECRET &amp; COOKIE SP_DC:
+        <div id="tab-guide-spotify" class="guide-tab-content flex-col" style="display: none; gap: 14px;">
+          <div style="font-weight: 700; color: var(--accent-green); font-size: 14px; display: flex; align-items: center; gap: 6px;">
+            <span>🔑</span> HƯỚNG DẪN LẤY SPOTIFY CLIENT ID, CLIENT SECRET &amp; COOKIE SP_DC:
           </div>
-          <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; font-size: 12px; line-height: 1.6;">
-            <b>1. Lấy Client ID &amp; Client Secret:</b><br>
-            • Truy cập <a href="https://developer.spotify.com/dashboard" target="_blank" style="color: var(--accent-green);">developer.spotify.com/dashboard</a> và đăng nhập.<br>
-            • Bấm <b>Create app</b> ➡️ Nhập App name (ví dụ: <code>DATN-Music-Collector</code>) ➡️ Chọn <b>Web API</b>.<br>
-            • Vào mục <b>Settings</b> ➡️ Copy <b>Client ID</b> và bấm <b>View client secret</b> để copy Secret.<br><br>
-            <b>2. Cách lấy Cookie <code>sp_dc</code> (Dành cho tài khoản Spotify Premium):</b><br>
-            • Mở trình duyệt Chrome/Edge và đăng nhập vào <a href="https://open.spotify.com" target="_blank" style="color: var(--accent-green);">open.spotify.com</a>.<br>
-            • Nhấn phím <b>F12</b> (hoặc chuột phải chọn <i>Inspect / Kiểm tra</i>).<br>
-            • Chuyển sang tab <b>Application</b> (Ứng dụng) ➡️ Ở cột trái mục <b>Cookies</b> chọn <code>https://open.spotify.com</code>.<br>
-            • Tìm dòng có tên <code>sp_dc</code> ➡️ Copy toàn bộ chuỗi giá trị (bắt đầu bằng <code>AQD...</code>).<br>
-            • Dán vào mục Cài Đặt Spotify trên Dashboard để hệ thống nhận diện gói Premium và ưu tiên chất lượng 320k.
+          
+          <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; font-size: 12px; line-height: 1.7;">
+            <div style="font-weight: 700; color: var(--accent-cyan); font-size: 13px;">1. Cách lấy Spotify Client ID &amp; Client Secret (Miễn phí 100%):</div>
+            • <b>Bước 1:</b> Truy cập trang quản trị nhà phát triển <a href="https://developer.spotify.com/dashboard" target="_blank" style="color: var(--accent-green); text-decoration: underline;">developer.spotify.com/dashboard</a> và đăng nhập tài khoản Spotify.<br>
+            • <b>Bước 2:</b> Bấm nút <b>Create app</b> ở góc trên bên phải.<br>
+            • <b>Bước 3:</b> Điền các thông tin cơ bản:
+              <ul style="margin: 4px 0 4px 18px;">
+                <li><b>App name:</b> <code>Music-Data-Collector-DATN</code></li>
+                <li><b>App description:</b> <code>Thu thap metadata am nhac phuc vu do an tot nghiep</code></li>
+                <li><b>Redirect URIs:</b> Điền <code>http://127.0.0.1:5000/callback</code></li>
+                <li><b>Which API/SDKs are you planning to use:</b> Tích chọn <b>Web API</b>.</li>
+              </ul>
+            • <b>Bước 4:</b> Bấm <b>Save</b> ➡️ Vào mục <b>Settings</b> của App ➡️ Copy chuỗi <b>Client ID</b> và bấm <b>View client secret</b> để copy <b>Client Secret</b>.<br>
+            • <b>Bước 5:</b> Mở Web Dashboard này ➡️ Vào <b>⚙️ Cài Đặt</b> ➡️ Tab <b>Spotify API Keys</b> ➡️ Dán Client ID &amp; Secret vào ➡️ Bấm <b>💾 Lưu Cấu Hình</b>.<br><br>
+
+            <div style="font-weight: 700; color: var(--accent-green); font-size: 13px;">2. Cách lấy Cookie <code>sp_dc</code> (Dành cho tài khoản Spotify Premium - Tùy chọn):</div>
+            • Cookie <code>sp_dc</code> giúp hệ thống nhận diện tài khoản Premium để ưu tiên tốc độ và phân giải cao nhất.<br>
+            • <b>Bước 1:</b> Mở trình duyệt Chrome hoặc Edge, truy cập và đăng nhập vào <a href="https://open.spotify.com" target="_blank" style="color: var(--accent-green); text-decoration: underline;">open.spotify.com</a>.<br>
+            • <b>Bước 2:</b> Nhấn phím <b>F12</b> trên bàn phím (hoặc chuột phải chọn <i>Inspect / Kiểm tra</i>).<br>
+            • <b>Bước 3:</b> Chọn tab <b>Application</b> (Ứng dụng) ở thanh công cụ phía trên (nếu không thấy, bấm vào dấu <code>&gt;&gt;</code>).<br>
+            • <b>Bước 4:</b> Ở cột menu bên trái, tìm mục <b>Storage</b> ➡️ Mở rộng <b>Cookies</b> ➡️ Bấm chọn dòng <code>https://open.spotify.com</code>.<br>
+            • <b>Bước 5:</b> Trong bảng danh sách cookie ở bên phải, tìm dòng có Name là <code>sp_dc</code> ➡️ Nhấp đúp vào cột <b>Value</b> và Copy toàn bộ chuỗi ký tự (bắt đầu bằng <code>AQD...</code>).<br>
+            • <b>Bước 6:</b> Dán vào ô Cookie <code>sp_dc</code> trong mục Cài đặt Spotify trên Dashboard.
           </div>
         </div>
 
         <!-- Tab 3: YouTube Cookie Guide -->
-        <div id="tab-guide-youtube" class="guide-tab-content flex-col" style="display: none; gap: 12px;">
-          <div style="font-weight: 700; color: #f59e0b; font-size: 13.5px;">
-            🍪 HƯỚNG DẪN XUẤT COOKIE YOUTUBE CHUẨN NETSCAPE (VƯỢT BOT CHECK 100%):
+        <div id="tab-guide-youtube" class="guide-tab-content flex-col" style="display: none; gap: 14px;">
+          <div style="font-weight: 700; color: #f59e0b; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+            <span>🍪</span> HƯỚNG DẪN XUẤT COOKIE YOUTUBE CHUẨN NETSCAPE (VƯỢT BOT CHECK 100%):
           </div>
-          <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; font-size: 12px; line-height: 1.6;">
-            <b>Tại sao cần Cookie YouTube?</b> Khi tải nhạc ở tốc độ cao trên máy chủ Cloud, YouTube có thể yêu cầu đăng nhập để xác nhận không phải bot.<br><br>
-            <b>Các bước lấy Cookie YouTube bằng Tiện ích Trình duyệt:</b><br>
-            1. Cài đặt tiện ích mở rộng <b>Get cookies.txt LOCALLY</b> trên Chrome/Edge từ Chrome Web Store.<br>
-            2. Mở tab mới, truy cập và đăng nhập tài khoản Google vào trang <a href="https://www.youtube.com" target="_blank" style="color: #f59e0b;">youtube.com</a>.<br>
-            3. Bấm vào biểu tượng tiện ích <b>Get cookies.txt LOCALLY</b> trên thanh trình duyệt.<br>
-            4. Bấm nút <b>Export</b> để tải về file <code>cookies.txt</code> hoặc bấm <b>Copy</b>.<br>
-            5. Vào mục <b>🍪 Headless Cookies</b> trên Web Dashboard này ➡️ Bấm <b>➕ Thêm Cookie Mới</b> ➡️ Dán nội dung vào hoặc tải file lên ➡️ Bấm <b>💾 Lưu &amp; Đặt Làm Cookie Chính</b>.
+
+          <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; font-size: 12px; line-height: 1.7;">
+            <div style="font-weight: 700; color: #f59e0b; font-size: 13px;">Vì sao cần Cookie YouTube?</div>
+            Khi hệ thống tải hàng trăm bài hát ở tốc độ cao từ máy chủ Cloud, YouTube có thể kích hoạt cơ chế bảo vệ thử thách (PO-Token / Bot challenge). Cookie phiên đăng nhập Google thật giúp xác thực bạn là người dùng hợp lệ, loại bỏ 100% lỗi chặn tải.<br><br>
+
+            <div style="font-weight: 700; color: var(--text-main); font-size: 13px;">Các bước xuất Cookie YouTube bằng Tiện Ích Trình Duyệt:</div>
+            • <b>Bước 1:</b> Cài đặt tiện ích mở rộng <b>Get cookies.txt LOCALLY</b> trên trình duyệt Chrome/Edge từ Chrome Web Store (Hoàn toàn an toàn, xử lý nội bộ không gửi dữ liệu ra ngoài).<br>
+            • <b>Bước 2:</b> Mở tab mới, truy cập vào trang <a href="https://www.youtube.com" target="_blank" style="color: #f59e0b; text-decoration: underline;">youtube.com</a> và đăng nhập tài khoản Google của bạn.<br>
+            • <b>Bước 3:</b> Bấm vào biểu tượng tiện ích <b>Get cookies.txt LOCALLY</b> ở góc trên thanh công cụ trình duyệt.<br>
+            • <b>Bước 4:</b> Bấm nút <b>Export</b> để tải về file <code>cookies.txt</code> hoặc bấm <b>Copy</b> toàn bộ nội dung trong khung.<br>
+            • <b>Bước 5:</b> Quay lại Web Dashboard này ➡️ Mở menu <b>🍪 Headless Cookies</b> trên thanh điều hướng bên trái ➡️ Bấm <b>➕ Thêm Cookie Mới</b> ➡️ Dán nội dung vào hoặc tải file <code>cookies.txt</code> lên ➡️ Bấm <b>💾 Lưu &amp; Đặt Làm Cookie Chính</b>.<br><br>
+
+            <div style="background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); border-radius: var(--radius-sm); padding: 10px 12px; color: #fcd34d; font-size: 11.5px;">
+              💡 <b>Mẹo quản lý:</b> Cookie YouTube thường có hạn sử dụng từ 6 tháng đến 1 năm. Bạn có thể kiểm tra ngày hết hạn và độ trễ Ping trực tiếp trong bảng quản trị Cookie bất kỳ lúc nào!
+            </div>
           </div>
         </div>
 
         <!-- Tab 4: Tailscale Exit Node Guide -->
-        <div id="tab-guide-tailscale" class="guide-tab-content flex-col" style="display: none; gap: 12px;">
-          <div style="font-weight: 700; color: var(--accent-purple); font-size: 13.5px; display: flex; align-items: center; gap: 6px;">
-            <span>💻</span> HƯỚNG DẪN TỰ DỰNG TAILSCALE EXIT NODE (ĐỊNH TUYẾN QUA MẠNG NHÀ DÂN):
+        <div id="tab-guide-tailscale" class="guide-tab-content flex-col" style="display: none; gap: 14px;">
+          <div style="font-weight: 700; color: var(--accent-purple); font-size: 14px; display: flex; align-items: center; gap: 6px;">
+            <span>💻</span> HƯỚNG DẪN TỰ DỰNG TAILSCALE EXIT NODE (MẠNG NHÀ DÂN 100%):
           </div>
-          <div style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.3); border-radius: var(--radius-md); padding: 14px; font-size: 12px; line-height: 1.65;">
-            <b>Lợi ích:</b> Chuyển hướng toàn bộ luồng tải nhạc từ Oracle Cloud đi vòng qua máy tính ở nhà bạn (IP mạng VNPT/Viettel/FPT) bằng đường hầm WireGuard mã hóa, YouTube nhận diện 100% là người dùng gia đình thật!<br><br>
+
+          <div style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.3); border-radius: var(--radius-md); padding: 16px; font-size: 12px; line-height: 1.7;">
+            <div style="font-weight: 700; color: var(--accent-purple); font-size: 13px;">Ưu điểm vượt trội của giải pháp Tailscale Exit Node:</div>
+            Giải pháp này kết nối máy chủ Oracle Cloud với máy tính ở nhà bạn qua đường hầm mã hóa WireGuard Mesh. Khi tải nhạc, YouTube sẽ nhìn thấy IP mạng gia đình của bạn (VNPT, Viettel, FPT) thay vì IP máy chủ Cloud, giúp tỉ lệ tải thành công đạt 100% mà không tốn chi phí thuê Proxy dân cư.<br><br>
+
+            <div style="font-weight: 700; color: var(--text-main); font-size: 13px;">4 Bước Cấu Hình Đơn Giản:</div>
             
             <b>Bước 1: Cài Tailscale trên Máy Tính Ở Nhà (Windows / Mac / Linux)</b><br>
-            • Tải và cài đặt Tailscale từ trang chủ <a href="https://tailscale.com/download" target="_blank" style="color: var(--accent-purple);">tailscale.com/download</a>.<br>
-            • Đăng nhập tài khoản Tailscale (miễn phí).<br><br>
+            • Tải và cài đặt Tailscale từ trang chủ <a href="https://tailscale.com/download" target="_blank" style="color: var(--accent-purple); text-decoration: underline;">tailscale.com/download</a>.<br>
+            • Mở ứng dụng và đăng nhập tài khoản Tailscale (Miễn phí hoàn toàn).<br><br>
 
             <b>Bước 2: Bật Chế Độ Exit Node Trên Máy Nhà</b><br>
-            • <i>Trên Windows / macOS:</i> Chuột phải vào biểu tượng Tailscale ở khay hệ thống ➡️ Chọn <b>Exit Node</b> ➡️ Tích chọn <b>Run as exit node</b>.<br>
-            • <i>Trên Linux:</i> Chạy lệnh terminal: <code>tailscale up --advertise-exit-node</code>.<br><br>
+            • <i>Trên Windows / macOS:</i> Nhấp chuột phải vào biểu tượng Tailscale ở góc màn hình ➡️ Chọn <b>Exit Node</b> ➡️ Tích chọn <b>Run as exit node</b>.<br>
+            • <i>Trên Linux:</i> Mở Terminal và chạy lệnh: <code>sudo tailscale up --advertise-exit-node</code>.<br><br>
 
-            <b>Bước 3: Phê Duyệt (Approve) Trên Tailscale Admin Console</b><br>
-            • Mở trang <a href="https://login.tailscale.com/admin/machines" target="_blank" style="color: var(--accent-purple);">login.tailscale.com/admin/machines</a>.<br>
-            • Bấm vào dấu <b>...</b> bên cạnh tên máy tính nhà bạn ➡️ Chọn <b>Edit route settings...</b> ➡️ Bật công tắc <b>Use as exit node</b>.<br><br>
+            <b>Bước 3: Phê Duyệt (Approve) Trên Trang Quản Trị Tailscale</b><br>
+            • Mở trình duyệt truy cập vào <a href="https://login.tailscale.com/admin/machines" target="_blank" style="color: var(--accent-purple); text-decoration: underline;">login.tailscale.com/admin/machines</a>.<br>
+            • Tìm tên máy tính nhà bạn ➡️ Bấm vào dấu <b>...</b> ở cuối dòng ➡️ Chọn <b>Edit route settings...</b> ➡️ Bật công tắc <b>Use as exit node</b> ➡️ Bấm <b>Save</b>.<br><br>
 
-            <b>Bước 4: Tạo Auth Key &amp; Kết Nối Lên Music Collector Studio</b><br>
-            • Trên trang Admin Tailscale: Vào <b>Settings</b> ➡️ <b>Keys</b> ➡️ Bấm <b>Generate auth key</b> ➡️ Copy chuỗi key (bắt đầu bằng <code>tskey-auth-...</code>).<br>
-            • Quay lại Dashboard này ➡️ Mở <b>⚙️ Settings</b> ➡️ Chọn tab <b>🌐 Ẩn IP &amp; WARP Shield</b> ➡️ Mục <b>💻 Tailscale Mesh Gateway</b> ➡️ Dán Auth Key vào và chọn máy nhà bạn làm Exit Node ➡️ Bấm <b>⚡ Kết Nối Tailnet</b>.
+            <b>Bước 4: Tạo Auth Key &amp; Kích Hoạt Trên Music Collector Studio</b><br>
+            • Trên trang Admin Tailscale: Vào <b>Settings</b> ➡️ <b>Keys</b> ➡️ Bấm <b>Generate auth key</b> ➡️ Tích chọn <i>Reusable</i> và bấm <b>Generate key</b> ➡️ Copy chuỗi key (bắt đầu bằng <code>tskey-auth-...</code>).<br>
+            • Quay lại Web Dashboard này ➡️ Mở <b>⚙️ Settings</b> ➡️ Chọn tab <b>🌐 Ẩn IP &amp; WARP Shield</b> ➡️ Tại mục <b>💻 Tailscale Mesh Gateway</b>: Dán Auth Key vào và chọn máy nhà bạn làm Exit Node ➡️ Bấm <b>⚡ Kết Nối Tailnet &amp; Kích Hoạt Exit Node</b>.
           </div>
         </div>
 
         <!-- Tab 5: Cloudflare WARP & Proxy Guide -->
-        <div id="tab-guide-warp" class="guide-tab-content flex-col" style="display: none; gap: 12px;">
-          <div style="font-weight: 700; color: var(--accent-cyan); font-size: 13.5px;">
-            🛡️ HƯỚNG DẪN SỬ DỤNG CLOUDFLARE WARP &amp; PROXY POOL:
+        <div id="tab-guide-warp" class="guide-tab-content flex-col" style="display: none; gap: 14px;">
+          <div style="font-weight: 700; color: var(--accent-cyan); font-size: 14px; display: flex; align-items: center; gap: 6px;">
+            <span>🛡️</span> HƯỚNG DẪN SỬ DỤNG CLOUDFLARE WARP &amp; PROXY POOL:
           </div>
-          <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; font-size: 12px; line-height: 1.6;">
-            <b>1. Cloudflare WARP (Khuyến nghị dùng mặc định):</b><br>
-            • Đã được cài đặt sẵn trên máy chủ Oracle Cloud.<br>
-            • Hoàn toàn miễn phí, băng thông không giới hạn, tốc độ cao nhất (mạng Anycast Singapore/VN).<br>
-            • Bạn chỉ cần vào <b>⚙️ Settings ➡️ Tab 🌐 Ẩn IP &amp; WARP Shield</b> để xem trạng thái hoặc bật/tắt 1-click.<br><br>
-            <b>2. Nạp thêm Proxy Dân Cư ngoài (Tùy chọn):</b><br>
-            • Hỗ trợ mọi định dạng: <code>HTTP</code>, <code>HTTPS</code>, <code>SOCKS4</code>, <code>SOCKS5</code> (có hoặc không có user/pass).<br>
-            • Vào mục <b>⚙️ Settings ➡️ Tab 🛡️ Proxy Pool &amp; Ping</b> ➡️ Bấm <b>➕ Thêm Proxy Mới</b> ➡️ Nhập IP, Port ➡️ Bấm <b>⚡ Đo Tốc Độ (Ping Test)</b> ➡️ Bấm <b>💾 Lưu Vào DB</b>.
+
+          <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; font-size: 12px; line-height: 1.7;">
+            <div style="font-weight: 700; color: var(--accent-cyan); font-size: 13px;">1. Cloudflare WARP Anycast Gateway (Khuyến nghị dùng mặc định):</div>
+            • <b>Trạng thái:</b> Đã được cài đặt và cấu hình sẵn trên máy chủ Oracle Cloud chạy ở cổng SOCKS5 cục bộ <code>127.0.0.1:40000</code>.<br>
+            • <b>Ưu điểm:</b> Hoàn toàn miễn phí, băng thông vô hạn, độ trễ cực thấp (~250ms), ẩn IP Datacenter Oracle sang dải IP Anycast <code>104.28.x.x</code> của Cloudflare.<br>
+            • <b>Cách điều khiển:</b> Vào <b>⚙️ Settings ➡️ Tab 🌐 Ẩn IP &amp; WARP Shield</b> để xem huy hiệu bảo vệ màu xanh 🟢 hoặc bấm nút Bật/Tắt 1-Click.<br><br>
+
+            <div style="font-weight: 700; color: var(--text-main); font-size: 13px;">2. Nạp thêm Proxy Dân Cư ngoài (Residential Proxies):</div>
+            • Hệ thống hỗ trợ nạp không giới hạn số lượng Proxy ngoài (từ BrightData, TinProxy, Webshare, Proxy-Seller...).<br>
+            • Hỗ trợ mọi giao thức: <code>HTTP</code>, <code>HTTPS</code>, <code>SOCKS4</code>, <code>SOCKS5</code> (có tài khoản/mật khẩu hoặc xác thực theo IP).<br>
+            • <b>Cách nạp:</b> Vào <b>⚙️ Settings ➡️ Tab 🛡️ Proxy Pool &amp; Ping</b> ➡️ Bấm <b>➕ Thêm Proxy Mới</b> ➡️ Nhập Host, Port, Loại Proxy ➡️ Bấm <b>⚡ Đo Tốc Độ (Ping Test)</b> ➡️ Bấm <b>💾 Lưu Proxy</b>.<br><br>
+
+            <div style="font-weight: 700; color: var(--accent-purple); font-size: 13px;">3. 4 Chiến Lược Xoay Vòng Proxy Thông Minh:</div>
+            • 🔄 <b>Round-Robin:</b> Luân chuyển tuần tự qua từng Proxy trong danh sách.<br>
+            • ⚡ <b>Lowest-Latency:</b> Luôn tự động chọn Proxy có thời gian phản hồi Ping thấp nhất.<br>
+            • 🛡️ <b>Failover-Only:</b> Ưu tiên sử dụng Cloudflare WARP, chỉ tự động kích hoạt Proxy dự phòng khi phát hiện mạng lỗi.<br>
+            • 🎲 <b>Random:</b> Chọn ngẫu nhiên một Proxy cho mỗi bài hát được tải.
           </div>
         </div>
 
         <!-- Tab 6: Team & Roles Guide -->
-        <div id="tab-guide-team" class="guide-tab-content flex-col" style="display: none; gap: 12px;">
-          <div style="font-weight: 700; color: var(--accent-purple); font-size: 13.5px;">
-            👥 HƯỚNG DẪN PHÂN QUYỀN &amp; QUẢN TRỊ NHÓM ĐỒ ÁN:
+        <div id="tab-guide-team" class="guide-tab-content flex-col" style="display: none; gap: 14px;">
+          <div style="font-weight: 700; color: var(--accent-purple); font-size: 14px; display: flex; align-items: center; gap: 6px;">
+            <span>👥</span> HƯỚNG DẪN PHÂN QUYỀN &amp; QUẢN TRỊ NHÓM ĐỒ ÁN:
           </div>
-          <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; font-size: 12px; line-height: 1.6;">
-            <b>Phân cấp 3 vai trò trong nhóm:</b><br>
-            • 👑 <b>Admin (Quản trị viên):</b> Toàn quyền quản trị tài khoản, cấu hình hệ thống, xóa bài hát, nạp proxy và cookie.<br>
-            • ⚡ <b>Collector (Thành viên thu thập):</b> Có quyền cào dữ liệu Spotify, tải audio 320k, nạp playlist, chỉnh sửa metadata.<br>
-            • 👁️ <b>Viewer (Khách xem / Giáo viên):</b> Chỉ xem báo cáo, nghe nhạc trên Data Catalog và xem nhật ký.<br><br>
-            <b>Cách cấp tài khoản thành viên:</b><br>
-            • Bấm vào mục <b>👥 Team &amp; Phân Quyền</b> trên menu trái ➡️ Bấm <b>➕ Thêm Thành Viên</b> ➡️ Nhập Username, Tên hiển thị, Vai trò và Mật khẩu ➡️ Bấm <b>💾 Lưu Tài Khoản</b>.<br>
-            • Bảng xếp hạng (Leaderboard) sẽ tự động ghi nhận số lượng bài hát từng thành viên đã cào và đã tải để đánh giá đóng góp công bằng!
+
+          <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; font-size: 12px; line-height: 1.7;">
+            <div style="font-weight: 700; color: var(--accent-purple); font-size: 13px;">Phân cấp 3 vai trò thành viên trong nhóm:</div>
+            • 👑 <b>Quản Trị Viên (Admin):</b> Toàn quyền quản trị tài khoản thành viên, cấu hình hệ thống, xóa bài hát, nạp proxy, nạp cookie và xuất báo cáo.<br>
+            • ⚡ <b>Thành Viên Thu Thập (Collector):</b> Có quyền cào dữ liệu Spotify, chạy pipeline tải nhạc 320k, chỉnh sửa metadata và nghe thử nhạc.<br>
+            • 👁️ <b>Khách Xem / Giáo Viên Hướng Dẫn (Viewer):</b> Chỉ xem báo cáo thống kê, nghe nhạc trên Data Catalog và xem nhật ký hoạt động.<br><br>
+
+            <div style="font-weight: 700; color: var(--text-main); font-size: 13px;">Các thao tác quản lý thành viên:</div>
+            • <b>Thêm thành viên mới:</b> Bấm vào mục <b>👥 Team &amp; Phân Quyền</b> trên menu trái ➡️ Bấm <b>➕ Thêm Thành Viên</b> ➡️ Nhập Username, Tên hiển thị, Vai trò và Mật khẩu ➡️ Bấm <b>💾 Lưu Tài Khoản</b>.<br>
+            • <b>Chỉnh sửa / Khóa tài khoản:</b> Bấm nút <b>✏️ Sửa</b> trên dòng của thành viên để đổi mật khẩu, đổi quyền hạn hoặc bỏ tích kích hoạt để tạm khóa tài khoản.<br>
+            • <b>Bảng Xếp Hạng Đóng Góp (Leaderboard):</b> Hệ thống tự động ghi nhận minh bạch số lượng bài hát từng thành viên đã cào và tải về để đánh giá tiến độ công bằng trong nhóm đồ án!<br>
+            • <b>Nhật Ký Kiểm Toán (Audit Logs):</b> Mọi thao tác thêm/sửa/xóa đều được lưu vết thời gian thực kèm tên người thực hiện trong cơ sở dữ liệu MongoDB.
           </div>
         </div>
 
       </div>
 
-      <div class="modal-footer flex-between" style="border-top: 1px solid var(--border-color); background: rgba(15,23,42,0.9); padding: 10px 18px;">
-        <span style="font-size: 11px; color: var(--text-muted);">
-          💡 Mọi thắc mắc kỹ thuật trong quá trình sử dụng đều có thể tra cứu nhanh trong popup hướng dẫn này bất kỳ lúc nào!
+      <div class="modal-footer flex-between" style="border-top: 1px solid var(--border-color); background: rgba(15,23,42,0.9); padding: 12px 22px; flex-shrink: 0;">
+        <span style="font-size: 11.5px; color: var(--text-muted);">
+          💡 Mọi thắc mắc kỹ thuật trong quá trình sử dụng có thể xem lại hướng dẫn này bất kỳ lúc nào bằng cách bấm vào mục <b>❓ Hướng Dẫn Hệ Thống</b> ở menu trái!
         </span>
-        <button class="btn btn-primary" onclick="window.closeGuideModal()">✓ Đã Hiểu &amp; Đóng Hướng Dẫn</button>
+        <button class="btn btn-primary" onclick="window.closeGuideModal()" style="font-weight: 700; padding: 6px 18px;">✓ Đã Hiểu &amp; Đóng Hướng Dẫn</button>
       </div>
     </div>
   </div>
