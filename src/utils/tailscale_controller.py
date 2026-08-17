@@ -131,21 +131,22 @@ class TailscaleController:
             }
 
     @classmethod
-    def _do_connect(cls, auth_key: str, exit_node: Optional[str], socks5_port: int) -> Dict[str, Any]:
+    def _do_connect(cls, auth_key: str, exit_node: Optional[str], socks5_port: int = 1055) -> Dict[str, Any]:
         clean_key = auth_key.strip()
         cmd = [
+            "sudo",
             "tailscale",
             "up",
-            f"--authkey={clean_key}",
-            f"--socks5-server=127.0.0.1:{socks5_port}",
+            f"--auth-key={clean_key}",
             "--accept-routes",
+            "--accept-risk=all",
             "--reset",
         ]
         if exit_node and exit_node.strip():
             cmd.append(f"--exit-node={exit_node.strip()}")
             cmd.append("--exit-node-allow-lan-access=true")
 
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=25)
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
         if res.returncode != 0:
             err_msg = (res.stderr or res.stdout).strip()
             logger.error(f"Tailscale up failed: {err_msg}")
@@ -176,7 +177,7 @@ class TailscaleController:
                 auth_key,
                 exit_node,
                 socks5_port,
-                timeout_sec=30,
+                timeout_sec=35,
             )
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -187,7 +188,7 @@ class TailscaleController:
     @classmethod
     def _do_set_exit_node(cls, exit_node_name_or_ip: str) -> Dict[str, Any]:
         clean_node = exit_node_name_or_ip.strip()
-        cmd = ["tailscale", "set"]
+        cmd = ["sudo", "tailscale", "set"]
         if clean_node:
             cmd.append(f"--exit-node={clean_node}")
             cmd.append("--exit-node-allow-lan-access=true")
@@ -220,7 +221,7 @@ class TailscaleController:
 
     @classmethod
     def _do_disconnect(cls) -> bool:
-        subprocess.run(["tailscale", "down"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+        subprocess.run(["sudo", "tailscale", "down"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
         time.sleep(1)
         status = cls.get_status()
         return not status["is_connected"]
