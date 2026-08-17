@@ -1099,6 +1099,7 @@
       <div class="flex-row" style="background: var(--bg-card-header); padding: 8px 18px; border-bottom: 1px solid var(--border-color); gap: 6px;">
         <button class="settings-tab-btn btn btn-primary" data-tab="tab-set-spotify" style="font-size: 11.5px;">🎵 Spotify Pool &amp; Test</button>
         <button class="settings-tab-btn btn btn-secondary" data-tab="tab-set-proxy" style="font-size: 11.5px;">🛡️ Proxy Pool &amp; Ping</button>
+        <button class="settings-tab-btn btn btn-secondary" data-tab="tab-set-shield" style="font-size: 11.5px;">🌐 Ẩn IP &amp; WARP Shield</button>
         <button class="settings-tab-btn btn btn-secondary" data-tab="tab-set-ytdlp" style="font-size: 11.5px;">⚡ yt-dlp Extraction Test</button>
         <button class="settings-tab-btn btn btn-secondary" data-tab="tab-set-engine" style="font-size: 11.5px;">🎧 Chất Lượng &amp; Engine</button>
       </div>
@@ -1285,6 +1286,105 @@
                 <tr><td colspan="6" class="text-center text-dim" style="padding: 20px;">⏳ Đang tải danh sách Proxies...</td></tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- Tab 2.5: Network Shield & Cloudflare WARP & Anti-Detection -->
+        <div id="tab-set-shield" class="settings-tab-content flex-col" style="display: none; gap: 14px;">
+          <div class="flex-between" style="background: linear-gradient(135deg, rgba(6,182,212,0.12), rgba(139,92,246,0.12)); border: 1px solid rgba(6,182,212,0.3); border-radius: var(--radius-md); padding: 12px 16px;">
+            <div>
+              <div style="font-weight: 700; color: var(--accent-cyan); font-size: 13.5px; display: flex; align-items: center; gap: 8px;">
+                <span>🛡️</span> TRUNG TÂM BẢO VỆ MẠNG, ẨN IP DATACENTER &amp; ANTI-DETECTION SHIELD
+              </div>
+              <div style="font-size: 11px; color: var(--text-dim); margin-top: 3px;">
+                Giấu dải IP Datacenter Oracle (ASN 31898), chuyển đổi IP Anycast Cloudflare WARP SOCKS5, xoay vòng Proxy dân cư và giả lập dấu vân tay trình duyệt.
+              </div>
+            </div>
+            <button id="btn-refresh-shield" class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; border-color: var(--accent-cyan); color: var(--accent-cyan);" onclick="window.refreshShieldStatus()">
+              ⚡ Kiểm Tra IP Đầu Ra (Ping Egress)
+            </button>
+          </div>
+
+          <!-- Live Egress IP Cards Grid -->
+          <div class="grid-2" style="gap: 12px;">
+            <div style="background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px 14px;">
+              <div class="flex-between">
+                <span style="font-size: 11px; font-weight: 700; color: var(--text-dim);">🏢 IP GỐC MÁY CHỦ (HOST DIRECT IP)</span>
+                <span class="badge badge-secondary" style="font-size: 9.5px;">Oracle Datacenter</span>
+              </div>
+              <div id="shield-host-ip" class="font-mono text-cyan" style="font-size: 16px; font-weight: 700; margin-top: 6px;">158.178.247.33</div>
+              <div id="shield-host-isp" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Oracle Corporation (Singapore - SG)</div>
+            </div>
+
+            <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(16,185,129,0.4); border-radius: var(--radius-md); padding: 12px 14px;">
+              <div class="flex-between">
+                <span style="font-size: 11px; font-weight: 700; color: var(--accent-green);">🌐 IP ĐẦU RA THỰC TẾ (ACTIVE EGRESS IP)</span>
+                <span id="shield-egress-badge" class="badge badge-success" style="font-size: 9.5px;">🟢 ĐÃ ẨN DANH TÍNH</span>
+              </div>
+              <div id="shield-egress-ip" class="font-mono text-green" style="font-size: 16px; font-weight: 700; margin-top: 6px;">Đang tải...</div>
+              <div id="shield-egress-isp" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Đang đo kết nối ra bên ngoài...</div>
+            </div>
+          </div>
+
+          <!-- Shield Status Alert Banner -->
+          <div id="shield-status-banner" style="background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 11.5px; color: #34d399; display: flex; align-items: center; gap: 8px;">
+            <span>🟢</span> <b>BẢO VỆ TOÀN DIỆN:</b> Yêu cầu tải nhạc từ YouTube/Spotify sẽ đi qua IP Anycast bảo vệ, vượt qua 100% cơ chế kiểm tra Bot.
+          </div>
+
+          <!-- Section 1: Cloudflare WARP SOCKS5 Gateway Daemon -->
+          <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(6,182,212,0.3); border-radius: var(--radius-md); padding: 14px; gap: 10px; display: flex; flex-direction: column;">
+            <div class="flex-between">
+              <div>
+                <div style="font-weight: 700; color: var(--accent-cyan); font-size: 12.5px; display: flex; align-items: center; gap: 6px;">
+                  <span>⚡</span> Cloudflare WARP Anycast SOCKS5 Gateway (127.0.0.1:40000)
+                </div>
+                <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">
+                  Chuyển hướng toàn bộ luồng tải nhạc qua mạng Anycast của Cloudflare (Miễn phí 100%, không giới hạn băng thông)
+                </div>
+              </div>
+              <div class="flex-row" style="gap: 8px; width: auto; align-items: center;">
+                <span id="warp-status-badge" class="badge badge-secondary" style="font-size: 10.5px;">⏳ Đang kiểm tra...</span>
+                <button id="btn-toggle-warp" class="btn btn-primary" style="padding: 4px 12px; font-size: 11px;" onclick="window.toggleWarpConnection()">
+                  ⚡ Bật WARP Gateway
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Multi-Strategy Proxy Rotation -->
+          <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; gap: 10px; display: flex; flex-direction: column;">
+            <div style="font-weight: 700; color: var(--text-main); font-size: 12.5px;">
+              🔄 Thuật Toán &amp; Chiến Lược Xoay Vòng Proxy (Rotation Strategy)
+            </div>
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Chọn Chiến Lược Luân Chuyển:</label>
+                <select id="shield-strategy-select" class="input-field">
+                  <option value="round_robin" selected>🔄 Round-Robin (Xoay vòng tuần tự qua từng Proxy)</option>
+                  <option value="lowest_latency">⚡ Lowest-Latency (Luôn ưu tiên Proxy có Ping nhanh nhất ms)</option>
+                  <option value="failover_only">🛡️ Failover-Only (Ưu tiên WARP, chỉ dùng Proxy khi gặp lỗi)</option>
+                  <option value="random">🎲 Random (Chọn ngẫu nhiên mỗi lần tải)</option>
+                </select>
+              </div>
+              <div class="form-group" style="display: flex; align-items: flex-end;">
+                <button id="btn-save-strategy" class="btn btn-primary" style="width: 100%;" onclick="window.saveNetworkStrategy()">
+                  💾 Áp Dụng Chiến Lược Mạng
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3: Browser & TLS Fingerprint Spoofing Profile -->
+          <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(139,92,246,0.3); border-radius: var(--radius-md); padding: 14px; gap: 8px; display: flex; flex-direction: column;">
+            <div style="font-weight: 700; color: var(--accent-purple); font-size: 12.5px; display: flex; align-items: center; gap: 6px;">
+              <span>🎭</span> Hồ Sơ Giả Lập Dấu Vân Tay Trình Duyệt (Browser Fingerprint Spoofing)
+            </div>
+            <div style="font-size: 11px; color: var(--text-dim);">
+              Hệ thống tự động nhúng các trường Client Hints (<code>Sec-CH-UA</code>), Locale (<code>vi-VN</code>, <code>en-US</code>), và User-Agent của Desktop Windows 11 thật để xóa bỏ mọi dấu vết của Linux/Server/Python.
+            </div>
+            <div style="background: rgba(0,0,0,0.4); border: 1px dashed rgba(139,92,246,0.4); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 11px; font-family: monospace; color: #c084fc;">
+              Active Profile: Google Chrome 131.0 on Windows 11 x64 (Sec-CH-UA: "Google Chrome";v="131", "Chromium";v="131")
+            </div>
           </div>
         </div>
 

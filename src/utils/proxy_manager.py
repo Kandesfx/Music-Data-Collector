@@ -58,20 +58,42 @@ class ProxyManager:
     def get_proxy(self) -> Optional[str]:
         """
         Get the next active proxy according to the configured rotation strategy.
-        Returns None if disabled or proxy pool is empty.
+        Strategies:
+        - 'round_robin': Sequential rotation through active pool
+        - 'lowest_latency': Selects the proxy with fastest ping time
+        - 'random': Selects a random active proxy
+        - 'failover_only': Uses first proxy (e.g. Cloudflare WARP), only fails over on errors
         """
         if not self.enabled or not self.proxies:
             return None
 
         if self.strategy == "random":
             return random.choice(self.proxies)
-        else:  # round_robin
+
+        elif self.strategy == "lowest_latency":
+            # If db_manager has proxy docs with latency info, pick lowest latency
+            if self.db_manager and hasattr(self.db_manager, "get_all_proxies"):
+                try:
+                    all_p = self.db_manager.get_all_proxies()
+                    active_p = [p for p in all_p if p.get("is_active") and p.get("status") == "alive"]
+                    if active_p:
+                        sorted_p = sorted(active_p, key=lambda x: x.get("latency_ms", 9999))
+                        return sorted_p[0].get("url")
+                except Exception:
+                    pass
+            return self.proxies[0]
+
+        elif self.strategy == "failover_only":
+            # Always return primary unless failed
+            return self.proxies[0]
+
+        else:  # round_robin (default)
             if not self._pool:
                 self._pool = cycle(self.proxies)
             return next(self._pool)
 
     def report_failure(self, proxy: str):
-        """Record a connection failure on a proxy; remove if failure threshold is reached."""
+        """Record a connection failure on a proxy; remove/quarantine if failure threshold is reached."""
         if not proxy or proxy not in self.proxies:
             return
 
@@ -80,10 +102,20 @@ class ProxyManager:
         logger.warning(f"Proxy failure reported for '{proxy}' ({fails}/3 failures).")
 
         if fails >= 3:
-            logger.error(f"Removing dead proxy from rotation: '{proxy}'")
+            logger.error(f"Quarantining dead proxy from rotation: '{proxy}'")
             if proxy in self.proxies:
                 self.proxies.remove(proxy)
                 self._pool = cycle(self.proxies) if self.proxies else None
+            # Update status in db if available
+            if self.db_manager and hasattr(self.db_manager, "update_proxy_status"):
+                try:
+                    all_p = self.db_manager.get_all_proxies()
+                    for p in all_p:
+                        if p.get("url") == proxy:
+                            self.db_manager.update_proxy_status(p["id"], status="dead", latency_ms=0, error="Quarantined after 3 consecutive failures")
+                            break
+                except Exception:
+                    pass
 
     def report_success(self, proxy: str):
         """Reset consecutive failure counter on successful request."""
@@ -95,6 +127,14 @@ class ProxyManager:
         self.enabled = enable
         logger.info(f"ProxyManager status updated: enabled={self.enabled}")
 
+    def set_strategy(self, strategy: str):
+        """Set proxy rotation strategy."""
+        valid_strategies = ["round_robin", "lowest_latency", "random", "failover_only"]
+        clean_strat = strategy.lower().strip()
+        if clean_strat in valid_strategies:
+            self.strategy = clean_strat
+            logger.info(f"Proxy rotation strategy set to: '{self.strategy}'")
+
     def add_proxy(self, proxy_url: str):
         """Add a new proxy to the active pool."""
         clean_url = proxy_url.strip()
@@ -103,6 +143,57 @@ class ProxyManager:
             self._fail_counts[clean_url] = 0
             self._pool = cycle(self.proxies)
             logger.info(f"Added new proxy: '{clean_url}' (Total active: {len(self.proxies)})")
+
+    @staticmethod
+    def inspect_proxy_egress(proxy_url: Optional[str] = None, timeout: int = 6) -> Dict[str, Any]:
+        """
+        Inspect the public IP address, ISP, and Country visible to outside servers.
+        If proxy_url is None, inspects direct host connection.
+        """
+        proxies = None
+        if proxy_url and proxy_url.strip():
+            proxies = {"http": proxy_url.strip(), "https": proxy_url.strip()}
+
+        start_t = time.perf_counter()
+        try:
+            r = requests.get(
+                "https://ipinfo.io/json",
+                proxies=proxies,
+                timeout=timeout,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) DATN-Shield/2026"}
+            )
+            latency = int((time.perf_counter() - start_t) * 1000)
+            if r.status_code == 200:
+                data = r.json()
+                return {
+                    "success": True,
+                    "ip": data.get("ip", "Unknown"),
+                    "isp": data.get("org", "Unknown ISP"),
+                    "city": data.get("city", "Unknown City"),
+                    "country": data.get("country", "Unknown Country"),
+                    "latency_ms": max(1, latency),
+                    "is_datacenter": any(kw in data.get("org", "").lower() for kw in ["oracle", "amazon", "google", "digitalocean", "microsoft", "ovh", "hetzner"]),
+                }
+        except Exception as e:
+            return {
+                "success": False,
+                "ip": "Failed to connect",
+                "isp": "N/A",
+                "city": "N/A",
+                "country": "N/A",
+                "latency_ms": 0,
+                "error": str(e),
+            }
+
+        return {
+            "success": False,
+            "ip": "Unknown",
+            "isp": "N/A",
+            "city": "N/A",
+            "country": "N/A",
+            "latency_ms": 0,
+            "error": "No response received",
+        }
 
     @staticmethod
     def test_proxy_connection(proxy_url: str, timeout: int = 5) -> Dict[str, Any]:

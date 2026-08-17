@@ -22,6 +22,7 @@ from src.storage.db_manager import DBManager
 from src.processors.post_processor import PostProcessor
 from src.downloaders.ytmusic_matcher import YTMusicMatcher
 from src.collectors.lyrics_collector import LyricsCollector
+from src.utils.fingerprint_generator import FingerprintGenerator
 from src.utils.cookie_checker import CookieHealthChecker
 from src.utils.health_checker import HealthChecker
 from src.utils.session_manager import SessionManager
@@ -529,15 +530,8 @@ class DownloadManager:
                     "preferredquality": "320",
                 }
             ],
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["web", "mweb", "tv", "android", "ios"]
-                }
-            },
-            "http_headers": {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-                "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
-            },
+            "extractor_args": FingerprintGenerator.get_ytdlp_extractor_args(),
+            "http_headers": FingerprintGenerator.get_ytdlp_http_headers(),
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,

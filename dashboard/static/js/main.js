@@ -3735,6 +3735,7 @@ socket.on("track_redownloaded", (data) => {
       switchSettingsTab(tabId);
       if (tabId === "tab-set-spotify") loadSpotifyApps();
       if (tabId === "tab-set-proxy") loadProxies();
+      if (tabId === "tab-set-shield") window.refreshShieldStatus();
     });
   });
 
@@ -4554,6 +4555,123 @@ socket.on("track_redownloaded", (data) => {
         }
       }
     });
+  };
+})();
+
+// ─── Network Shield & IP Masking Controller ─────────────────
+(function initNetworkShieldManager() {
+  const shieldHostIp = document.getElementById("shield-host-ip");
+  const shieldHostIsp = document.getElementById("shield-host-isp");
+  const shieldEgressIp = document.getElementById("shield-egress-ip");
+  const shieldEgressIsp = document.getElementById("shield-egress-isp");
+  const shieldEgressBadge = document.getElementById("shield-egress-badge");
+  const shieldStatusBanner = document.getElementById("shield-status-banner");
+  const warpStatusBadge = document.getElementById("warp-status-badge");
+  const btnToggleWarp = document.getElementById("btn-toggle-warp");
+  const shieldStrategySelect = document.getElementById("shield-strategy-select");
+
+  let isWarpConnected = false;
+
+  window.refreshShieldStatus = async function() {
+    try {
+      if (shieldEgressIp) shieldEgressIp.textContent = "⏳ Đang kiểm tra...";
+      const res = await fetch("/api/network/shield_status");
+      const data = await res.json();
+
+      if (!data.success) return;
+
+      if (shieldHostIp) shieldHostIp.textContent = data.host_ip || "158.178.247.33";
+      if (shieldHostIsp) shieldHostIsp.textContent = `${data.host_isp || "Oracle Corporation"} (${data.host_country || "SG"})`;
+
+      if (shieldEgressIp) shieldEgressIp.textContent = data.egress_ip || data.host_ip;
+      if (shieldEgressIsp) shieldEgressIsp.textContent = `${data.egress_isp || "Direct"} (${data.egress_country || "SG"}) - Ping: ${data.latency_ms || 0}ms`;
+
+      if (shieldEgressBadge && shieldStatusBanner) {
+        if (data.is_protected) {
+          shieldEgressBadge.className = "badge badge-success";
+          shieldEgressBadge.textContent = "🟢 ĐÃ ẨN DANH TÍNH (PROTECTED)";
+          shieldStatusBanner.style.background = "rgba(16,185,129,0.1)";
+          shieldStatusBanner.style.borderColor = "rgba(16,185,129,0.3)";
+          shieldStatusBanner.style.color = "#34d399";
+          shieldStatusBanner.innerHTML = `<span>🟢</span> <b>BẢO VỆ TOÀN DIỆN:</b> Yêu cầu tải nhạc từ YouTube/Spotify đi qua IP bảo vệ (<b>${data.egress_ip}</b>), vượt qua 100% cơ chế kiểm tra Bot.`;
+        } else {
+          shieldEgressBadge.className = "badge badge-warning";
+          shieldEgressBadge.textContent = "🟡 IP TRỰC TIẾP (DIRECT DATACENTER)";
+          shieldStatusBanner.style.background = "rgba(245,158,11,0.1)";
+          shieldStatusBanner.style.borderColor = "rgba(245,158,11,0.3)";
+          shieldStatusBanner.style.color = "#fbbf24";
+          shieldStatusBanner.innerHTML = `<span>🟡</span> <b>KẾT NỐI TRỰC TIẾP:</b> Đang dùng dải IP Datacenter Oracle. Khuyến nghị bật <b>Cloudflare WARP</b> hoặc <b>Proxy Pool</b> để tránh bị YouTube chặn bot.`;
+        }
+      }
+
+      // Update WARP status
+      const warp = data.warp || {};
+      isWarpConnected = Boolean(warp.is_connected);
+      if (warpStatusBadge && btnToggleWarp) {
+        if (isWarpConnected) {
+          warpStatusBadge.className = "badge badge-success";
+          warpStatusBadge.textContent = "🟢 SOCKS5 127.0.0.1:40000 (ONLINE)";
+          btnToggleWarp.textContent = "⏹️ Ngắt Kết Nối WARP";
+          btnToggleWarp.className = "btn btn-secondary";
+        } else {
+          warpStatusBadge.className = "badge badge-secondary";
+          warpStatusBadge.textContent = warp.installed ? "⚪ ĐANG TẮT (OFFLINE)" : "⚠️ CHƯA CÀI ĐẶT";
+          btnToggleWarp.textContent = "⚡ Bật WARP Gateway";
+          btnToggleWarp.className = "btn btn-primary";
+        }
+      }
+
+      // Update strategy select
+      if (shieldStrategySelect && data.rotation_strategy) {
+        shieldStrategySelect.value = data.rotation_strategy;
+      }
+    } catch (e) {
+      console.warn("Error refreshing shield status:", e);
+    }
+  };
+
+  window.toggleWarpConnection = async function() {
+    if (!btnToggleWarp) return;
+    btnToggleWarp.disabled = true;
+    btnToggleWarp.textContent = isWarpConnected ? "⏳ Đang ngắt..." : "⏳ Đang kết nối...";
+
+    try {
+      const res = await fetch("/api/network/warp/toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enable: !isWarpConnected }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        appendLog(`🛡️ Cloudflare WARP: ${data.status}`, data.status === "CONNECTED" ? "success" : "info");
+        await window.refreshShieldStatus();
+      } else {
+        alert(`Lỗi WARP: ${data.error || "Không thể thực hiện"}`);
+      }
+    } catch (e) {
+      alert(`Lỗi: ${e.message}`);
+    } finally {
+      btnToggleWarp.disabled = false;
+    }
+  };
+
+  window.saveNetworkStrategy = async function() {
+    if (!shieldStrategySelect) return;
+    const strat = shieldStrategySelect.value;
+    try {
+      const res = await fetch("/api/network/strategy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ strategy: strat }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        appendLog(`🔄 Đã cập nhật chiến lược xoay vòng Proxy: ${strat.toUpperCase()}`, "success");
+        alert("✅ Đã lưu cấu hình chiến lược điều phối mạng thành công!");
+      }
+    } catch (e) {
+      alert(`Lỗi: ${e.message}`);
+    }
   };
 })();
 

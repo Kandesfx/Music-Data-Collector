@@ -32,6 +32,8 @@ from src.utils.health_checker import HealthChecker
 from src.utils.session_manager import SessionManager
 from src.utils.proxy_manager import ProxyManager
 from src.utils.cookie_checker import CookieHealthChecker
+from src.utils.warp_controller import WarpController
+from src.utils.fingerprint_generator import FingerprintGenerator
 from src.utils.logger import get_logger
 
 logger = get_logger("dashboard")
@@ -1672,6 +1674,104 @@ def test_all_proxies_endpoint():
         results.append({"id": p["id"], **res})
     controller.pm.sync_from_db()
     return jsonify({"success": True, "results": results})
+
+
+# ─── Network Shield, Cloudflare WARP & Egress IP Endpoints ────
+
+@app.route("/api/network/shield_status", methods=["GET"])
+def get_network_shield_status():
+    """Retrieve comprehensive network shield status including host IP vs masked egress IP."""
+    try:
+        warp_status = WarpController.get_status()
+        active_proxy = controller.pm.get_proxy()
+        egress = ProxyManager.inspect_proxy_egress(active_proxy)
+        direct_info = ProxyManager.inspect_proxy_egress(None)
+
+        is_protected = (
+            (warp_status.get("is_connected") and not egress.get("is_datacenter"))
+            or (active_proxy and not egress.get("is_datacenter"))
+            or (egress.get("ip") != direct_info.get("ip") and egress.get("success"))
+        )
+
+        return jsonify({
+            "success": True,
+            "is_protected": is_protected,
+            "host_ip": direct_info.get("ip", "Unknown"),
+            "host_isp": direct_info.get("isp", "Oracle Corporation"),
+            "host_country": direct_info.get("country", "SG"),
+            "egress_ip": egress.get("ip", direct_info.get("ip")),
+            "egress_isp": egress.get("isp", direct_info.get("isp")),
+            "egress_country": egress.get("country", direct_info.get("country")),
+            "latency_ms": egress.get("latency_ms", direct_info.get("latency_ms", 0)),
+            "warp": warp_status,
+            "proxy_pool": controller.pm.get_status(),
+            "rotation_strategy": controller.pm.strategy,
+            "fingerprint_profile": FingerprintGenerator.PROFILES[0]["name"],
+        })
+    except Exception as ex:
+        logger.error(f"Error fetching shield status: {ex}")
+        return jsonify({"success": False, "error": str(ex)}), 500
+
+
+@app.route("/api/network/warp/toggle", methods=["POST"])
+def toggle_warp_endpoint():
+    """Enable or disable Cloudflare WARP SOCKS5 daemon."""
+    data = request.get_json() or {}
+    enable = bool(data.get("enable", True))
+
+    if enable:
+        ok = WarpController.connect()
+        if ok:
+            # Ensure WARP is in DB proxies
+            controller.db.upsert_proxy({
+                "id": "proxy_cloudflare_warp",
+                "name": "Cloudflare WARP Anycast SOCKS5 Gateway",
+                "url": WarpController.DEFAULT_PROXY_URL,
+                "protocol": "socks5",
+                "is_active": True,
+                "is_warp": True,
+            })
+            controller.pm.sync_from_db()
+            controller.log("🛡️ Đã kết nối Cloudflare WARP SOCKS5 Gateway (127.0.0.1:40000). IP Datacenter đã được ẩn!", level="success")
+            return jsonify({"success": True, "status": "CONNECTED", "warp": WarpController.get_status()})
+        else:
+            return jsonify({"success": False, "error": "Không thể kết nối Cloudflare WARP"}), 500
+    else:
+        ok = WarpController.disconnect()
+        # Deactivate in db
+        try:
+            controller.db.update_proxy_active("proxy_cloudflare_warp", False)
+        except Exception:
+            pass
+        controller.pm.sync_from_db()
+        controller.log("⚠️ Đã ngắt kết nối Cloudflare WARP. Hệ thống đang dùng IP trực tiếp.", level="warning")
+        return jsonify({"success": True, "status": "DISCONNECTED", "warp": WarpController.get_status()})
+
+
+@app.route("/api/network/strategy", methods=["POST"])
+def set_network_strategy_endpoint():
+    """Set proxy rotation strategy."""
+    data = request.get_json() or {}
+    strat = data.get("strategy", "round_robin").lower().strip()
+    controller.pm.set_strategy(strat)
+    
+    # Save to MongoDB system_settings
+    controller.db.db.system_settings.update_one(
+        {"setting_id": "global_settings"},
+        {"$set": {"proxy_strategy": strat}},
+        upsert=True
+    )
+    controller.log(f"🔄 Đã cập nhật chiến lược xoay vòng Proxy: {strat.upper()}", level="info")
+    return jsonify({"success": True, "strategy": strat})
+
+
+@app.route("/api/network/test_egress", methods=["POST"])
+def test_egress_endpoint():
+    """Test egress IP via specific proxy URL."""
+    data = request.get_json() or {}
+    proxy_url = data.get("proxy_url")
+    result = ProxyManager.inspect_proxy_egress(proxy_url)
+    return jsonify(result)
 
 
 # ─── User Accounts & Role Permission REST Endpoints ──────────
