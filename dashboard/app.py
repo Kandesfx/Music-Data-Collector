@@ -33,6 +33,7 @@ from src.utils.session_manager import SessionManager
 from src.utils.proxy_manager import ProxyManager
 from src.utils.cookie_checker import CookieHealthChecker
 from src.utils.warp_controller import WarpController
+from src.utils.tailscale_controller import TailscaleController
 from src.utils.fingerprint_generator import FingerprintGenerator
 from src.utils.logger import get_logger
 
@@ -1683,18 +1684,22 @@ def get_network_shield_status():
     """Retrieve comprehensive network shield status including host IP vs masked egress IP."""
     try:
         warp_status = WarpController.get_status()
+        tailscale_status = TailscaleController.get_status()
         active_proxy = controller.pm.get_proxy()
         
         # If WARP is connected and no other proxy is explicitly chosen, use WARP SOCKS5
         test_target_proxy = active_proxy
         if not test_target_proxy and warp_status.get("is_connected"):
             test_target_proxy = WarpController.DEFAULT_PROXY_URL
+        elif not test_target_proxy and tailscale_status.get("is_connected") and tailscale_status.get("active_exit_node"):
+            test_target_proxy = TailscaleController.DEFAULT_PROXY_URL
 
         egress = ProxyManager.inspect_proxy_egress(test_target_proxy)
         direct_info = ProxyManager.inspect_proxy_egress(None)
 
         is_protected = bool(
             (warp_status.get("is_connected") and egress.get("success") and not egress.get("is_datacenter"))
+            or (tailscale_status.get("is_connected") and egress.get("success") and not egress.get("is_datacenter"))
             or (active_proxy and egress.get("success") and not egress.get("is_datacenter"))
             or (egress.get("ip") != direct_info.get("ip") and egress.get("success"))
         )
@@ -1710,6 +1715,7 @@ def get_network_shield_status():
             "egress_country": egress.get("country", direct_info.get("country")),
             "latency_ms": egress.get("latency_ms", direct_info.get("latency_ms", 0)),
             "warp": warp_status,
+            "tailscale": tailscale_status,
             "proxy_pool": controller.pm.get_status(),
             "rotation_strategy": controller.pm.strategy,
             "fingerprint_profile": FingerprintGenerator.PROFILES[0]["name"],
@@ -1753,6 +1759,76 @@ def toggle_warp_endpoint():
         controller.pm.sync_from_db()
         controller.log("⚠️ Đã ngắt kết nối Cloudflare WARP. Hệ thống đang dùng IP trực tiếp.", level="warning")
         return jsonify({"success": True, "status": "DISCONNECTED", "warp": WarpController.get_status()})
+
+
+# ─── Tailscale Mesh Exit Node Endpoints ──────────────────────
+
+@app.route("/api/network/tailscale/status", methods=["GET"])
+def get_tailscale_status():
+    """Retrieve detailed Tailscale status, exit nodes, and IPs."""
+    status = TailscaleController.get_status()
+    return jsonify({"success": True, "tailscale": status})
+
+
+@app.route("/api/network/tailscale/connect", methods=["POST"])
+def connect_tailscale_endpoint():
+    """Authenticate and connect Tailscale using an Auth Key and SOCKS5 gateway."""
+    data = request.get_json() or {}
+    auth_key = data.get("auth_key", "").strip()
+    exit_node = data.get("exit_node", "").strip()
+    socks5_port = int(data.get("socks5_port", 1055))
+
+    if not auth_key:
+        return jsonify({"success": False, "error": "Vui lòng cung cấp Tailscale Auth Key (tskey-auth-...)"}), 400
+
+    res = TailscaleController.connect_with_auth_key(
+        auth_key=auth_key,
+        exit_node=exit_node if exit_node else None,
+        socks5_port=socks5_port,
+    )
+
+    if res.get("success"):
+        # Auto-register Tailscale SOCKS5 proxy in DB
+        proxy_url = f"socks5://127.0.0.1:{socks5_port}"
+        controller.db.upsert_proxy({
+            "id": "proxy_tailscale_exit_node",
+            "name": f"Tailscale Mesh Exit Node ({exit_node or 'Direct Mesh'})",
+            "url": proxy_url,
+            "protocol": "socks5",
+            "is_active": True,
+            "is_tailscale": True,
+        })
+        controller.pm.toggle(True)
+        controller.pm.sync_from_db()
+        controller.log(f"💻 Đã kết nối Tailscale Mesh Network! Exit Node: {exit_node or 'Mặc định'}", level="success")
+        return jsonify({"success": True, "tailscale": TailscaleController.get_status()})
+    else:
+        return jsonify({"success": False, "error": res.get("error")}), 500
+
+
+@app.route("/api/network/tailscale/exit_node", methods=["POST"])
+def set_tailscale_exit_node_endpoint():
+    """Switch active Tailscale exit node."""
+    data = request.get_json() or {}
+    exit_node = data.get("exit_node", "").strip()
+    res = TailscaleController.set_exit_node(exit_node)
+    if res.get("success"):
+        controller.log(f"🔄 Đã chuyển Tailscale Exit Node sang: '{exit_node or 'None'}'", level="info")
+        return jsonify({"success": True, "tailscale": TailscaleController.get_status()})
+    return jsonify({"success": False, "error": res.get("error")}), 500
+
+
+@app.route("/api/network/tailscale/disconnect", methods=["POST"])
+def disconnect_tailscale_endpoint():
+    """Disconnect Tailscale."""
+    ok = TailscaleController.disconnect()
+    try:
+        controller.db.update_proxy_active("proxy_tailscale_exit_node", False)
+    except Exception:
+        pass
+    controller.pm.sync_from_db()
+    controller.log("⚠️ Đã ngắt kết nối Tailscale Mesh Network.", level="warning")
+    return jsonify({"success": True, "status": "DISCONNECTED", "tailscale": TailscaleController.get_status()})
 
 
 @app.route("/api/network/strategy", methods=["POST"])

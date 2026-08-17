@@ -4625,6 +4625,10 @@ socket.on("track_redownloaded", (data) => {
       if (shieldStrategySelect && data.rotation_strategy) {
         shieldStrategySelect.value = data.rotation_strategy;
       }
+
+      if (window.loadTailscaleStatus) {
+        window.loadTailscaleStatus();
+      }
     } catch (e) {
       console.warn("Error refreshing shield status:", e);
     }
@@ -4673,5 +4677,203 @@ socket.on("track_redownloaded", (data) => {
       alert(`Lỗi: ${e.message}`);
     }
   };
+})();
+
+// ─── Tailscale Mesh Exit Node Manager ───────────────────────
+(function initTailscaleManager() {
+  const tailscaleStatusBadge = document.getElementById("tailscale-status-badge");
+  const tailscaleMeshIp = document.getElementById("tailscale-mesh-ip");
+  const tailscaleActiveExitNode = document.getElementById("tailscale-active-exit-node");
+  const tailscaleAuthKey = document.getElementById("tailscale-auth-key");
+  const tailscaleExitNodeSelect = document.getElementById("tailscale-exit-node-select");
+  const btnConnectTailscale = document.getElementById("btn-connect-tailscale");
+  const btnDisconnectTailscale = document.getElementById("btn-disconnect-tailscale");
+
+  window.loadTailscaleStatus = async function() {
+    try {
+      const res = await fetch("/api/network/tailscale/status");
+      const data = await res.json();
+      if (!data.success) return;
+
+      const ts = data.tailscale || {};
+      if (tailscaleStatusBadge) {
+        if (ts.is_connected) {
+          tailscaleStatusBadge.className = "badge badge-success";
+          tailscaleStatusBadge.textContent = "🟢 ONLINE (WireGuard Mesh)";
+        } else if (ts.installed) {
+          tailscaleStatusBadge.className = "badge badge-secondary";
+          tailscaleStatusBadge.textContent = "⚪ OFFLINE";
+        } else {
+          tailscaleStatusBadge.className = "badge badge-warning";
+          tailscaleStatusBadge.textContent = "⚠️ CHƯA CÀI ĐẶT";
+        }
+      }
+
+      if (tailscaleMeshIp) {
+        tailscaleMeshIp.textContent = ts.primary_ip || (ts.is_connected ? "100.x (Connected)" : "Chưa kết nối");
+      }
+
+      if (tailscaleActiveExitNode) {
+        if (ts.active_exit_node) {
+          tailscaleActiveExitNode.innerHTML = `<span class="badge badge-success" style="font-size: 11px;">🟢 ${ts.active_exit_node.hostname || 'Home-PC'} (${ts.active_exit_node.ip})</span>`;
+        } else {
+          tailscaleActiveExitNode.textContent = "Không có (Direct Egress)";
+        }
+      }
+
+      // Populate exit nodes dropdown
+      if (tailscaleExitNodeSelect && ts.available_exit_nodes) {
+        const currentVal = tailscaleExitNodeSelect.value;
+        tailscaleExitNodeSelect.innerHTML = `<option value="">-- Không dùng Exit Node (Mesh Only) --</option>` +
+          ts.available_exit_nodes.map(node => {
+            const isSel = (ts.active_exit_node && ts.active_exit_node.id === node.id) ? "selected" : "";
+            return `<option value="${node.hostname}" ${isSel}>💻 ${node.hostname} (${node.ip || node.os}) - ${node.online ? '🟢 Online' : '⚪ Offline'}</option>`;
+          }).join("");
+        if (currentVal && !ts.active_exit_node) tailscaleExitNodeSelect.value = currentVal;
+      }
+    } catch (e) {
+      console.warn("Error loading tailscale status:", e);
+    }
+  };
+
+  window.connectTailscale = async function() {
+    const authKey = tailscaleAuthKey ? tailscaleAuthKey.value.trim() : "";
+    const exitNode = tailscaleExitNodeSelect ? tailscaleExitNodeSelect.value.trim() : "";
+
+    if (!authKey) {
+      alert("Vui lòng nhập Tailscale Auth Key (bắt đầu bằng tskey-auth-...)!");
+      return;
+    }
+
+    if (btnConnectTailscale) {
+      btnConnectTailscale.disabled = true;
+      btnConnectTailscale.textContent = "⏳ Đang kết nối WireGuard...";
+    }
+
+    try {
+      const res = await fetch("/api/network/tailscale/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          auth_key: authKey,
+          exit_node: exitNode,
+          socks5_port: 1055,
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        appendLog(`💻 Tailscale: Đã kết nối thành công vào Tailnet! IP: ${data.tailscale?.primary_ip || ''}`, "success");
+        if (tailscaleAuthKey) tailscaleAuthKey.value = "";
+        await window.loadTailscaleStatus();
+        await window.refreshShieldStatus();
+      } else {
+        alert(`Lỗi kết nối Tailscale: ${data.error || "Không rõ nguyên nhân"}`);
+      }
+    } catch (e) {
+      alert(`Lỗi: ${e.message}`);
+    } finally {
+      if (btnConnectTailscale) {
+        btnConnectTailscale.disabled = false;
+        btnConnectTailscale.textContent = "⚡ Kết Nối Tailnet & Kích Hoạt Exit Node";
+      }
+    }
+  };
+
+  window.disconnectTailscale = async function() {
+    if (btnDisconnectTailscale) {
+      btnDisconnectTailscale.disabled = true;
+      btnDisconnectTailscale.textContent = "⏳ Đang ngắt...";
+    }
+    try {
+      const res = await fetch("/api/network/tailscale/disconnect", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        appendLog("⚠️ Đã ngắt kết nối Tailscale", "warning");
+        await window.loadTailscaleStatus();
+        await window.refreshShieldStatus();
+      } else {
+        alert(`Lỗi: ${data.error}`);
+      }
+    } catch (e) {
+      alert(`Lỗi: ${e.message}`);
+    } finally {
+      if (btnDisconnectTailscale) {
+        btnDisconnectTailscale.disabled = false;
+        btnDisconnectTailscale.textContent = "⏹️ Ngắt Kết Nối Tailscale";
+      }
+    }
+  };
+
+  if (tailscaleExitNodeSelect) {
+    tailscaleExitNodeSelect.addEventListener("change", async () => {
+      const selectedNode = tailscaleExitNodeSelect.value;
+      try {
+        const res = await fetch("/api/network/tailscale/exit_node", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ exit_node: selectedNode })
+        });
+        const data = await res.json();
+        if (data.success) {
+          appendLog(`🔄 Đã đổi Tailscale Exit Node sang: '${selectedNode || 'None'}'`, "info");
+          await window.loadTailscaleStatus();
+          await window.refreshShieldStatus();
+        }
+      } catch (e) {
+        alert(`Lỗi đổi exit node: ${e.message}`);
+      }
+    });
+  }
+})();
+
+// ─── Interactive System Guide Modal Controller ──────────────
+(function initGuideModal() {
+  const guideModal = document.getElementById("guide-modal");
+  const guideTabBtns = document.querySelectorAll(".guide-tab-btn");
+  const guideTabContents = document.querySelectorAll(".guide-tab-content");
+
+  window.openGuideModal = function(targetTab = "tab-guide-overview") {
+    if (guideModal) {
+      guideModal.style.display = "flex";
+      switchGuideTab(targetTab);
+    }
+  };
+
+  window.closeGuideModal = function() {
+    if (guideModal) guideModal.style.display = "none";
+  };
+
+  function switchGuideTab(tabId) {
+    guideTabBtns.forEach(btn => {
+      if (btn.getAttribute("data-tab") === tabId) {
+        btn.classList.add("btn-primary");
+        btn.classList.remove("btn-secondary");
+      } else {
+        btn.classList.remove("btn-primary");
+        btn.classList.add("btn-secondary");
+      }
+    });
+
+    guideTabContents.forEach(c => {
+      if (c.id === tabId) {
+        c.style.display = "flex";
+      } else {
+        c.style.display = "none";
+      }
+    });
+  }
+
+  guideTabBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tabId = btn.getAttribute("data-tab");
+      switchGuideTab(tabId);
+    });
+  });
+
+  if (guideModal) {
+    guideModal.addEventListener("click", (e) => {
+      if (e.target === guideModal) window.closeGuideModal();
+    });
+  }
 })();
 

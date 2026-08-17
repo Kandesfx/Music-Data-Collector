@@ -1357,6 +1357,13 @@ Khi triển khai hệ thống trên hạ tầng đám mây (Oracle Cloud Infrast
   - Đánh dấu Cookie chính (`is_active`).
   - Gắn tag người nạp và chia sẻ cho các thành viên trong nhóm.
 
+#### G. Giải Pháp Tự Dựng: Tailscale Mesh Exit Node (Self-Hosted Home Gateway)
+- **Module:** [`src/utils/tailscale_controller.py`](file:///d:/Hai/study/DATN/music-data-collector/src/utils/tailscale_controller.py) & [`scripts/install_tailscale.py`](file:///d:/Hai/study/DATN/music-data-collector/scripts/install_tailscale.py).
+- **Cơ chế:**
+  - Định tuyến toàn bộ lưu lượng tải nhạc từ máy chủ Oracle Cloud qua máy tính cá nhân ở nhà (IP mạng dân cư VNPT/Viettel/FPT) thông qua đường hầm mã hóa WireGuard Mesh.
+  - Khởi chạy Tailscale ở chế độ SOCKS5 Gateway trên cổng `127.0.0.1:1055` (`tailscale up --authkey=<key> --socks5-server=127.0.0.1:1055 --exit-node=<node>`).
+  - Tự động nạp vào `db.proxies` và cho phép điều khiển, đổi Exit Node linh hoạt qua Web Dashboard (`/api/network/tailscale/*`).
+
 ---
 
 > **Ghi chú:** Tài liệu này đủ chi tiết để mỗi Task có thể được giao cho 1 agent độc lập triển khai. Mỗi agent chỉ cần đọc Task tương ứng + các Section reference để code mà không cần hỏi thêm.

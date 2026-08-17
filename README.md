@@ -70,6 +70,7 @@ music-data-collector/
 │       ├── proxy_manager.py     # Quản lý pool proxy xoay vòng đa chiến lược
 │       ├── cookie_checker.py    # Kiểm tra sức khỏe & hạn dùng Netscape cookies
 │       ├── warp_controller.py   # Điều khiển Cloudflare WARP SOCKS5 Gateway
+│       ├── tailscale_controller.py # Điều khiển Tailscale Mesh Exit Node Gateway
 │       └── fingerprint_generator.py # Giả lập dấu vân tay trình duyệt Desktop
 ├── dashboard/
 │   ├── app.py                   # Flask + Socket.IO Server điều khiển Dashboard
@@ -80,6 +81,7 @@ music-data-collector/
 ├── scripts/
 │   ├── setup_check.py           # Kiểm tra toàn bộ môi trường & công cụ
 │   ├── install_warp.py          # Script cài đặt Cloudflare WARP trên OCI
+│   ├── install_tailscale.py     # Script cài đặt Tailscale Mesh Daemon trên OCI
 │   ├── test_network_shield.py   # Script kiểm thử IP Masking & Fingerprint
 │   ├── deploy_to_oci.py         # Script tự động deploy SSH lên OCI Server
 │   ├── crawl_metadata.py        # Script cào metadata từ Spotify
