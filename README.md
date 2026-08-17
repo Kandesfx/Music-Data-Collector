@@ -1,6 +1,6 @@
-# 🎵 Music Data Collector v3 (Streaming Master Pipeline)
+# 🎵 Music Data Collector v3.5 (Streaming Master & Network Shield Pipeline)
 
-> **Công cụ Thu thập & Xử lý Dữ liệu Âm nhạc Tự động Chuẩn Phòng Thu (Spotify + YTMusic Precision + LRCLIB + 320k MP3 + Dashboard UI)**  
+> **Công cụ Thu thập & Xử lý Dữ liệu Âm nhạc Tự động Chuẩn Phòng Thu (Spotify + YTMusic Precision + LRCLIB + 320k MP3 + Cloudflare WARP Shield + Team RBAC + Dashboard UI)**  
 > Phục vụ cho Đồ Án Tốt Nghiệp: *Xây dựng Hệ Thống Nghe Nhạc Trực Tuyến*
 
 🌐 **Production Live URL:** [https://musiccollector.kandes.io.vn](https://musiccollector.kandes.io.vn)  
@@ -8,7 +8,7 @@
 
 ---
 
-## 🌟 Tính Năng Nổi Bật v3
+## 🌟 Tính Năng Nổi Bật v3.5
 
 1. **Thu thập Metadata Chuẩn từ Spotify API + Free Guest Fallback:** Lấy thông tin bài hát (track), nghệ sĩ (artist), album, ảnh bìa HD, năm phát hành, popularity và tự động chuẩn hóa thể loại (genres) — có sẵn fallback `FreeSpotify` không bị chặn 403 khi dùng tài khoản Free.
 2. **YTMusic Precision Matcher & In-process Downloader (320kbps):**
@@ -18,12 +18,20 @@
 3. **Tự động Lấy Lời Bài Hát & Lời Karaoke (.lrc) qua LRCLIB:**
    - Tự động xuất file lời đồng bộ `.lrc` từng mili-giây đặt cạnh file MP3 (phục vụ tính năng Karaoke chạy chữ theo nhạc trên Web App).
    - Nhúng lời bài hát dạng văn bản vào thẻ `USLT` trong file MP3.
-4. **6 Lớp Bảo Vệ & Phục Hồi Chống Gián Đoạn:**
-   - **SQLite SessionManager:** Tự động ghi checkpoint sau từng bài hát. Khi mất điện hoặc tắt máy, script resume đúng bài hát dở dang mà không mất tiến trình.
-   - **HealthChecker:** Tự động phát hiện khi mạng hoặc YouTube bị nghẽn (quá 5 lỗi liên tiếp) -> Tự động kích hoạt chế độ ngủ (Cool-off) tránh bị block IP.
-   - **ProxyManager (Toggle):** Tùy chọn bật/tắt Proxy xoay vòng (Round-robin / Random) qua `.env` hoặc Dashboard.
-   - **Master Audio Post-Processing:** Tự động kiểm tra tính toàn vẹn (Header, Size > 100KB, Duration) và nhúng toàn bộ thẻ ID3v2.3 (APIC HD, USLT, TRCK, TPE2, TCON) qua `mutagen`.
-5. **Real-time Web Dashboard:** Giao diện Dark-Mode điều khiển trực quan qua WebSocket (Start / Pause / Resume / Stop / Retry / Export).
+4. **🛡️ Network Shield & Ẩn IP Datacenter (Anti-Detection Architecture):**
+   - **Cloudflare WARP Anycast SOCKS5 Gateway (127.0.0.1:40000):** Định tuyến toàn bộ lưu lượng tải qua mạng Anycast của Cloudflare (`104.28.x.x`), ẩn hoàn toàn IP Datacenter Oracle (`158.178.247.33`).
+   - **Browser & TLS Fingerprint Spoofing (`FingerprintGenerator`):** Tự động sinh `User-Agent`, `Sec-CH-UA`, `Sec-CH-UA-Platform` và `Accept-Language` chuẩn Windows 11 Desktop thật.
+   - **Multi-Strategy Proxy Rotation (`ProxyManager`):** Hỗ trợ 4 chiến lược xoay vòng (Round-Robin, Lowest-Latency, Failover-Only, Random) và tự động cách ly (Auto-Quarantine) proxy chết.
+5. **🍪 Kho Cookies Pool Tập Trung & Cơ Chế Kiểm Tra Chủ Động (Active Probe):**
+   - Lưu trữ cookies Netscape vĩnh viễn trong MongoDB (`db.cookie_pool`).
+   - Tự động thẩm định sống/chết trực tiếp trước khi báo lỗi, loại bỏ hoàn toàn các cảnh báo nhầm khi gặp video bị thử nghiệm GVS PO-Token của YouTube.
+6. **👥 Quản Trị Nhóm, Phân Quyền (RBAC) & Bảng Đóng Góp:**
+   - Phân cấp 3 vai trò: `Admin`, `Collector`, `Viewer`.
+   - Bảng xếp hạng đóng góp (Leaderboard) theo thời gian thực và nhật ký kiểm toán (Audit Logs).
+7. **❓ Hướng Dẫn Hệ Thống Tương Tác:** Popup hướng dẫn từng bước lấy Spotify API keys, cookie SP_DC, cookie YouTube, Proxy và vận hành hệ thống.
+8. **Master Audio Post-Processing & Crash-Safe Recovery:**
+   - Kiểm tra tính toàn vẹn file MP3 và nhúng toàn bộ thẻ ID3v2.3 (APIC HD, USLT, TRCK, TPE2, TCON) qua `mutagen`.
+   - SQLite SessionManager lưu checkpoint từng bài hát.
 
 ---
 
@@ -39,7 +47,8 @@ music-data-collector/
 ├── src/
 │   ├── collectors/
 │   │   ├── spotify_collector.py # Thu thập metadata từ Spotify API + FreeSpotify Fallback
-│   │   └── lyrics_collector.py  # Lấy lời bài hát đồng bộ .lrc từ LRCLIB
+│   │   ├── lyrics_collector.py  # Lấy lời bài hát đồng bộ .lrc từ LRCLIB
+│   │   └── trend_manager.py     # Quản lý nguồn nhạc trending & tuyển chọn
 │   ├── downloaders/
 │   │   ├── ytmusic_matcher.py   # Bộ so khớp âm thanh chuẩn phòng thu trên YTMusic
 │   │   └── download_manager.py  # Bộ điều phối tải audio tốc độ cao (320kbps)
@@ -49,7 +58,8 @@ music-data-collector/
 │   │   ├── deduplicator.py      # Loại bỏ bài hát trùng lặp
 │   │   └── genre_mapper.py      # Chuẩn hóa thể loại âm nhạc
 │   ├── storage/
-│   │   ├── db_manager.py        # Quản lý Database MongoDB
+│   │   ├── db_manager.py        # Quản lý Database MongoDB (Tracks, Proxies, Cookies)
+│   │   ├── auth_manager.py      # Quản lý xác thực, RBAC & Leaderboard nhóm
 │   │   ├── file_manager.py      # Quản lý thư mục & file audio/ảnh/.lrc
 │   │   └── export_manager.py    # Xuất JSON, SQL seed & Collection Report
 │   └── utils/
@@ -57,15 +67,21 @@ music-data-collector/
 │       ├── rate_limiter.py      # Điều tiết tần suất gọi API
 │       ├── health_checker.py    # Giám sát tỷ lệ lỗi & auto-pause
 │       ├── session_manager.py   # Quản lý checkpoint SQLite crash-safe
-│       └── proxy_manager.py     # Quản lý pool proxy xoay vòng
+│       ├── proxy_manager.py     # Quản lý pool proxy xoay vòng đa chiến lược
+│       ├── cookie_checker.py    # Kiểm tra sức khỏe & hạn dùng Netscape cookies
+│       ├── warp_controller.py   # Điều khiển Cloudflare WARP SOCKS5 Gateway
+│       └── fingerprint_generator.py # Giả lập dấu vân tay trình duyệt Desktop
 ├── dashboard/
 │   ├── app.py                   # Flask + Socket.IO Server điều khiển Dashboard
-│   ├── templates/index.html     # Giao diện HTML Dashboard
+│   ├── templates/index.html     # Giao diện HTML Dashboard (Settings, Team, Cookies, Guide)
 │   └── static/
 │       ├── css/style.css        # Giao diện Glassmorphism Dark Mode
-│       └── js/main.js           # Client Socket.IO logic
+│       └── js/main.js           # Client Socket.IO & Modal controllers
 ├── scripts/
 │   ├── setup_check.py           # Kiểm tra toàn bộ môi trường & công cụ
+│   ├── install_warp.py          # Script cài đặt Cloudflare WARP trên OCI
+│   ├── test_network_shield.py   # Script kiểm thử IP Masking & Fingerprint
+│   ├── deploy_to_oci.py         # Script tự động deploy SSH lên OCI Server
 │   ├── crawl_metadata.py        # Script cào metadata từ Spotify
 │   ├── download_audio.py        # Script tải audio MP3 hàng loạt
 │   ├── process_files.py         # Script quét & sửa lỗi file MP3
@@ -76,8 +92,8 @@ music-data-collector/
 │   ├── exports/                 # Dữ liệu xuất (JSON, SQL, Markdown)
 │   └── session.db               # Database SQLite lưu checkpoint
 ├── requirements.txt
-├── SYSTEM_DESIGN.md             # Tài liệu thiết kế hệ thống chi tiết
-└── ANALYSIS_SCRAPLING.md        # Tài liệu phân tích công cụ & khả năng phục hồi
+├── SYSTEM_DESIGN.md             # Tài liệu thiết kế hệ thống chi tiết v3.5
+└── README.md                    # Hướng dẫn sử dụng & cài đặt v3.5
 ```
 
 ---

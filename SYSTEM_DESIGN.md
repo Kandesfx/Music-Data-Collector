@@ -1,7 +1,7 @@
-# 🎵 Music Data Collector — Thiết kế Hệ thống v3 (Streaming Master Pipeline)
+# 🎵 Music Data Collector — Thiết kế Hệ thống v3.5 (Streaming Master Pipeline)
 
-> **Phiên bản:** 3.0 — Tích hợp Spotify API (Free Guest Fallback) + YTMusic Precision Matcher + LRCLIB Synced Lyrics + In-process yt-dlp (320k MP3)  
-> **Ngày cập nhật:** 2026-08-16  
+> **Phiên bản:** 3.5 — Tích hợp Network Shield (Cloudflare WARP + Fingerprint Spoofing), Persistent Cookie Pool, Team RBAC & Active Bot-Check Resilience  
+> **Ngày cập nhật:** 2026-08-17  
 > **Mục đích:** Tài liệu thiết kế kiến trúc chuẩn phòng thu và đặc tả kỹ thuật cho hệ thống thu thập âm nhạc  
 > **Dự án cha:** Xây dựng hệ thống nghe nhạc trực tuyến (ĐATN)  
 > **Phạm vi:** Chỉ dùng nội bộ trong lớp/giáo viên — KHÔNG công khai
@@ -22,6 +22,7 @@
 10. [Tiêu chí Chất lượng & Ràng buộc Dữ liệu](#10-tiêu-chí-chất-lượng--ràng-buộc-dữ-liệu)
 11. [Kế hoạch Kiểm thử (Test Suite)](#11-kế-hoạch-kiểm-thử-test-suite)
 12. [Rủi ro & Giải pháp Dự phòng](#12-rủi-ro--giải-pháp-dự-phòng)
+13. [Kiến Trúc Network Shield, Ẩn IP Datacenter & Phân Quyền Thành Viên](#13-kiến-trúc-network-shield-ẩn-ip-datacenter--phân-quyền-thành-viên)
 
 ---
 
@@ -1273,4 +1274,90 @@ PHẢI ĐẢM BẢO:
 
 ---
 
+## 13. Kiến Trúc Network Shield, Ẩn IP Datacenter & Phân Quyền Thành Viên
+
+### 13.1 Bối cảnh & Thách thức
+Khi triển khai hệ thống trên hạ tầng đám mây (Oracle Cloud Infrastructure - OCI), toàn bộ lưu lượng mạng Egress mang dải IP Datacenter (`ASN 31898 - Oracle Corporation`). Các nền tảng streaming như YouTube, YouTube Music và Spotify áp dụng các cơ chế hạn chế nghiêm ngặt:
+- **GVS PO-Token Challenge:** Yêu cầu Proof-of-Origin Token khi tải video từ IP Datacenter.
+- **Bot Challenge ("Sign in to confirm you're not a bot"):** Hạn chế tần suất đối với các dải IP máy chủ.
+- **Browser Fingerprint Mismatch:** Nhận diện các yêu cầu từ Python/Linux/curl thông qua User-Agent và Client Hints thiếu đồng bộ.
+
+---
+
+### 13.2 Mô hình Kiến trúc Network Shield Đa Tầng
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                 MUSIC DATA COLLECTOR STUDIO - NETWORK & ANTI-DETECTION SHIELD               │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                             │
+│  [1. Browser Fingerprint Spoofing] ───> Giả lập User-Agent, Sec-CH-UA, TLS Header Trình Duyệt│
+│                                                                                             │
+│  [2. Egress Traffic Routing Hub]                                                            │
+│       ├── 🌐 Mode A: Cloudflare WARP SOCKS5 Gateway (127.0.0.1:40000) [Miễn phí / Băng thông ∞]│
+│       ├── 🛡️ Mode B: Rotating Residential Proxy Pool (Xoay vòng IP Dân cư)                    │
+│       ├── 💻 Mode C: Custom Exit Node / Tailscale Tunnel (Định tuyến máy nhà)               │
+│       └── ⚡ Mode D: Direct Connection (Fallback an toàn)                                    │
+│                                                                                             │
+│  [3. Active Cookie Health Probe] ────> Thẩm định trạng thái Cookie trước khi kích hoạt cảnh báo│
+│                                                                                             │
+│  [4. Live Egress IP Inspector] ─────> Giám sát thời gian thực: Host IP vs Egress IP          │
+│                                       (Hiển thị huy hiệu 🟢 PROTECTED / 🟡 DIRECT trên Web)  │
+│                                                                                             │
+│  [5. Team RBAC & Persistent Storage]-> Quản lý người dùng, phân quyền (Admin, Collector,     │
+│                                       Viewer), Leaderboard và Persistent Cookie Pool trong DB│
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 13.3 Chi tiết các Thành phần Kỹ thuật
+
+#### A. Cloudflare WARP SOCKS5 Gateway Daemon
+- **Module:** [`src/utils/warp_controller.py`](file:///d:/Hai/study/DATN/music-data-collector/src/utils/warp_controller.py) & [`scripts/install_warp.py`](file:///d:/Hai/study/DATN/music-data-collector/scripts/install_warp.py).
+- **Cơ chế:** Khởi chạy `cloudflare-warp` ở chế độ SOCKS5 Proxy trên cổng `127.0.0.1:40000`. Toàn bộ luồng tải nhạc của yt-dlp được định tuyến qua mạng Anycast của Cloudflare (IP `104.28.x.x`, AS13335), ẩn hoàn toàn IP gốc `158.178.247.33` của Oracle.
+- **Tương tác:** Công tắc Bật/Tắt 1-Click trên Web Dashboard (`POST /api/network/warp/toggle`).
+
+#### B. Bộ Giả Lập Dấu Vân Tay Trình Duyệt (Fingerprint Generator)
+- **Module:** [`src/utils/fingerprint_generator.py`](file:///d:/Hai/study/DATN/music-data-collector/src/utils/fingerprint_generator.py).
+- **Cơ chế:** Sinh các hồ sơ trình duyệt Desktop thật (Chrome 131, Edge 131 trên Windows 11 / macOS Sequoia), tự động đồng bộ:
+  - `User-Agent`: Chuẩn desktop browser 64-bit.
+  - `Sec-CH-UA`, `Sec-CH-UA-Platform`, `Sec-CH-UA-Mobile`: Khớp chính xác với thông số hệ điều hành.
+  - `Accept-Language`: `vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7`.
+- **Tích hợp:** Nhúng vào `SpotifyCollector`, `DownloadManager` (yt-dlp options), `YTMusicMatcher`.
+
+#### C. Bộ Điều Phối Proxy Xoay Vòng Đa Chiến Lược (ProxyManager)
+- **Module:** [`src/utils/proxy_manager.py`](file:///d:/Hai/study/DATN/music-data-collector/src/utils/proxy_manager.py).
+- **4 Chiến lược luân chuyển:**
+  1. `Round-Robin`: Xoay vòng tuần tự qua từng Proxy trong Pool.
+  2. `Lowest-Latency`: Tự động ưu tiên Proxy có thời gian phản hồi thấp nhất (`ms`).
+  3. `Failover-Only`: Ưu tiên Cloudflare WARP Gateway, chỉ chuyển sang Proxy dự phòng khi có lỗi.
+  4. `Random`: Lựa chọn ngẫu nhiên mỗi bài tải.
+- **Tự động cách ly (Auto-Quarantine):** Tự động chuyển trạng thái proxy sang `dead` nếu gặp 3 lỗi liên tiếp.
+- **Live Egress Inspector:** Đo đạc IP thực tế, ISP và vị trí địa lý thông qua `inspect_proxy_egress()`.
+
+#### D. Cơ Chế Chủ Động Thẩm Định Cookie & Xử Lý Lỗi Bot-Check
+- **Module:** [`src/downloaders/download_manager.py`](file:///d:/Hai/study/DATN/music-data-collector/src/downloaders/download_manager.py) & [`src/utils/cookie_checker.py`](file:///d:/Hai/study/DATN/music-data-collector/src/utils/cookie_checker.py).
+- **Khắc phục False-Alarm:** Khi gặp phản hồi `Sign in to confirm you're not a bot` trên một bài hát cụ thể (do bài hát bị gắn cờ thử nghiệm GVS PO-Token), hệ thống **không tự động dừng Pipeline**. Thay vào đó, hệ thống chạy active probe `CookieHealthChecker.check_health(probe_network=True)`:
+  - Nếu Cookie **vẫn sống:** Ghi nhận cảnh báo cho riêng bài hát đó, tiếp tục tải bình thường các bài tiếp theo trong hàng đợi.
+  - Nếu Cookie **thực sự hết hạn:** Kích hoạt cảnh báo và tạm dừng Pipeline để bảo vệ an toàn dữ liệu.
+
+#### E. Hệ Thống Phân Quyền Thành Viên (Team RBAC) & Bảng Đóng Góp
+- **Module:** [`src/storage/auth_manager.py`](file:///d:/Hai/study/DATN/music-data-collector/src/storage/auth_manager.py) & REST APIs (`/api/users`, `/api/team/leaderboard`).
+- **3 Cấp độ quyền hạn:**
+  - `Admin`: Toàn quyền quản trị tài khoản, cấu hình hệ thống, xóa bài hát, nạp proxy và cookie.
+  - `Collector`: Cào dữ liệu, tải nhạc, nạp playlist, gắn nhãn.
+  - `Viewer`: Xem báo cáo, nghe nhạc trên Data Catalog, xem logs.
+- **Tính năng:** Bảng xếp hạng đóng góp (số bài đã cào, số bài đã tải), nhật ký hoạt động (Audit Logs), thêm/sửa/xóa/khóa tài khoản thành viên.
+
+#### F. Kho Lưu Trữ Cookie Tập Trung Trên MongoDB (Cookie Pool)
+- **Module:** `db.cookie_pool` & `/api/cookies`.
+- **Cơ chế:** Lưu trữ danh sách cookies dạng Netscape vĩnh viễn trên cơ sở dữ liệu (không bị mất khi restart server), hỗ trợ:
+  - Kiểm tra hạn sử dụng và độ trễ ping trực tiếp tới YouTube (`ms`).
+  - Đánh dấu Cookie chính (`is_active`).
+  - Gắn tag người nạp và chia sẻ cho các thành viên trong nhóm.
+
+---
+
 > **Ghi chú:** Tài liệu này đủ chi tiết để mỗi Task có thể được giao cho 1 agent độc lập triển khai. Mỗi agent chỉ cần đọc Task tương ứng + các Section reference để code mà không cần hỏi thêm.
+
