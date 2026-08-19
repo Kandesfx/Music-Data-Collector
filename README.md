@@ -1,6 +1,6 @@
-# 🎵 Music Data Collector v3.5 (Streaming Master & Network Shield Pipeline)
+# 🎵 Music Data Collector v4.0 (Streaming Master & AI Moderation Pipeline)
 
-> **Công cụ Thu thập & Xử lý Dữ liệu Âm nhạc Tự động Chuẩn Phòng Thu (Spotify + YTMusic Precision + LRCLIB + 320k MP3 + Cloudflare WARP Shield + Team RBAC + Dashboard UI)**  
+> **Công cụ Thu thập & Xử lý Dữ liệu Âm nhạc Tự động Chuẩn Phòng Thu (Spotify + YTMusic Precision + LRCLIB + 320k MP3 + AI Audio Moderation + Cloudflare WARP & Tailscale Shield + Team RBAC + Studio Cockpit UI)**  
 > Phục vụ cho Đồ Án Tốt Nghiệp: *Xây dựng Hệ Thống Nghe Nhạc Trực Tuyến*
 
 🌐 **Production Live URL:** [https://musiccollector.kandes.io.vn](https://musiccollector.kandes.io.vn)  
@@ -8,7 +8,7 @@
 
 ---
 
-## 🌟 Tính Năng Nổi Bật v3.5
+## 🌟 Tính Năng Nổi Bật v4.0
 
 1. **Thu thập Metadata Chuẩn từ Spotify API + Free Guest Fallback:** Lấy thông tin bài hát (track), nghệ sĩ (artist), album, ảnh bìa HD, năm phát hành, popularity và tự động chuẩn hóa thể loại (genres) — có sẵn fallback `FreeSpotify` không bị chặn 403 khi dùng tài khoản Free.
 2. **YTMusic Precision Matcher & In-process Downloader (320kbps):**
@@ -18,18 +18,27 @@
 3. **Tự động Lấy Lời Bài Hát & Lời Karaoke (.lrc) qua LRCLIB:**
    - Tự động xuất file lời đồng bộ `.lrc` từng mili-giây đặt cạnh file MP3 (phục vụ tính năng Karaoke chạy chữ theo nhạc trên Web App).
    - Nhúng lời bài hát dạng văn bản vào thẻ `USLT` trong file MP3.
-4. **🛡️ Network Shield & Ẩn IP Datacenter (Anti-Detection Architecture):**
+4. **🛡️ Hệ Thống Kiểm Duyệt Chất Lượng Âm Thanh AI (AI Audio Moderation Matrix):**
+   - **Ma trận 100 điểm với 5 tiêu chí độc lập:** Độ chuẩn xác thời lượng & cắt khoảng lặng (40đ), Chất lượng 320kbps/44.1kHz (20đ), Chuẩn độ lớn phát thanh EBU R128 (-16.0 đến -10.0 LUFS) (15đ), Thẻ ID3v2.3 & Ảnh bìa HD (15đ), Độ khớp lời Karaoke .lrc (10đ).
+   - Phân loại rõ ràng: `Approved` ($\ge 85$), `Flagged` ($65-84$), `Rejected` ($<65$).
+   - Tab Báo cáo Kiểm duyệt AI trực quan trong Inspector Modal và tính năng kiểm duyệt hàng loạt toàn bộ kho nhạc 1-click (hỗ trợ Smart Caching).
+5. **⚡ Kiến Trúc Ưu Tiên Mạng Tailscale-First & Android VR Core Siêu Tốc:**
+   - Thứ tự ưu tiên 3 tầng: **Tailscale/WARP (No-Cookie)** $\rightarrow$ **Cookie Authentication** $\rightarrow$ **Direct Connection**.
+   - Tích hợp **Android VR/Mobile Player Core** giúp tải với tốc độ cực đại **`36.81 MB/s`** (4.4s/bài 320k) mà hoàn toàn không cần cookie.
+6. **🎧 Trình Phát Nhạc Studio Cockpit & Quản Lý Hàng Đợi Thông Minh:**
+   - Thanh phát nhạc Floating Player Bar: Hỗ trợ Lặp lại toàn danh sách (`🔁`), Lặp lại 1 bài (`🔂`), Phát ngẫu nhiên (`🔀`), Chuyển bài (`⏮`/`⏭`), tự động chuyển bài khi kết thúc.
+   - Quản lý hàng đợi tải (Download Queue Manager): Đồng bộ 2 chiều số lượng tải, xem trước metadata và chọn toàn bộ hàng đợi xuyên trang.
+7. **🛡️ Network Shield & Ẩn IP Datacenter (Anti-Detection Architecture):**
    - **Cloudflare WARP Anycast SOCKS5 Gateway (127.0.0.1:40000):** Định tuyến toàn bộ lưu lượng tải qua mạng Anycast của Cloudflare (`104.28.x.x`), ẩn hoàn toàn IP Datacenter Oracle (`158.178.247.33`).
    - **Browser & TLS Fingerprint Spoofing (`FingerprintGenerator`):** Tự động sinh `User-Agent`, `Sec-CH-UA`, `Sec-CH-UA-Platform` và `Accept-Language` chuẩn Windows 11 Desktop thật.
    - **Multi-Strategy Proxy Rotation (`ProxyManager`):** Hỗ trợ 4 chiến lược xoay vòng (Round-Robin, Lowest-Latency, Failover-Only, Random) và tự động cách ly (Auto-Quarantine) proxy chết.
-5. **🍪 Kho Cookies Pool Tập Trung & Cơ Chế Kiểm Tra Chủ Động (Active Probe):**
+8. **🍪 Kho Cookies Pool Tập Trung & Cơ Chế Kiểm Tra Chủ Động (Active Probe):**
    - Lưu trữ cookies Netscape vĩnh viễn trong MongoDB (`db.cookie_pool`).
-   - Tự động thẩm định sống/chết trực tiếp trước khi báo lỗi, loại bỏ hoàn toàn các cảnh báo nhầm khi gặp video bị thử nghiệm GVS PO-Token của YouTube.
-6. **👥 Quản Trị Nhóm, Phân Quyền (RBAC) & Bảng Đóng Góp:**
+   - Tự động thẩm định sống/chết trực tiếp trước khi báo lỗi, loại bỏ hoàn toàn các cảnh báo nhầm.
+9. **👥 Quản Trị Nhóm, Phân Quyền (RBAC) & Bảng Đóng Góp:**
    - Phân cấp 3 vai trò: `Admin`, `Collector`, `Viewer`.
    - Bảng xếp hạng đóng góp (Leaderboard) theo thời gian thực và nhật ký kiểm toán (Audit Logs).
-7. **❓ Hướng Dẫn Hệ Thống Tương Tác:** Popup hướng dẫn từng bước lấy Spotify API keys, cookie SP_DC, cookie YouTube, Proxy và vận hành hệ thống.
-8. **Master Audio Post-Processing & Crash-Safe Recovery:**
+10. **Master Audio Post-Processing & Crash-Safe Recovery:**
    - Kiểm tra tính toàn vẹn file MP3 và nhúng toàn bộ thẻ ID3v2.3 (APIC HD, USLT, TRCK, TPE2, TCON) qua `mutagen`.
    - SQLite SessionManager lưu checkpoint từng bài hát.
 
@@ -215,11 +224,42 @@ Kết quả xuất ra tại `data/exports/`:
      4. Nạp vào Studio tại mục **🍪 Headless Cookies** -> Lưu & Kích hoạt (*Lưu ý: Chỉ đóng tab ẩn danh, KHÔNG bấm Đăng xuất trên YouTube*).
    - **Giải pháp 2 (Dùng Tailscale Mesh Exit Node - Không Cần Cookie):**
      - Bật Tailscale Exit Node trên máy tính cá nhân ở nhà (mạng VNPT/Viettel/FPT).
-     - Kết nối Tailscale trên Studio Dashboard -> Toàn bộ luồng tải sẽ đi qua IP dân cư thật, vượt 100% rào cản mà không cần Cookie.
+     - Hệ thống sẽ tự động sử dụng **Android VR / Mobile Player Core** để tải với tốc độ cực đại **36.8 MB/s**, bỏ qua 100% kiểm tra bot và hoàn toàn không cần cookie.
+
+---
+
+## 🔒 Hướng Dẫn Kết Nối Database Trên OCI Dành Cho Lập Trình Viên (Dev Local)
+
+Để kết nối và xem cơ sở dữ liệu MongoDB trên máy chủ Oracle Cloud từ máy tính cá nhân (dùng **MongoDB Compass** hoặc code Python dưới máy local) một cách an toàn tuyệt đối:
+
+### Cách 1: Dùng MongoDB Compass với "SSH Tunnel" (Khuyên Dùng)
+1. Mở **MongoDB Compass** $\rightarrow$ Chọn **Advanced Connection Options**.
+2. **Tab General:** Điền `mongodb://127.0.0.1:27017`
+3. **Tab Proxy/SSH Tunnel:**
+   - Chọn: **SSH with Identity File**
+   - **SSH Hostname:** `158.178.247.33` (Port: `22`)
+   - **SSH Username:** `ubuntu`
+   - **SSH Key File:** Chọn đường dẫn đến file `C:\Users\ASUS\.ssh\oci_key.pem`
+4. Bấm **Save & Connect** $\rightarrow$ Xem toàn bộ database `music_streaming` trực quan.
+
+### Cách 2: Mở Đường Hầm SSH Tunnel Bằng PowerShell (Dành Cho Chạy Code Dưới Local)
+1. Mở PowerShell trên máy tính và chạy:
+   ```powershell
+   ssh -i C:\Users\ASUS\.ssh\oci_key.pem -L 27017:localhost:27017 ubuntu@158.178.247.33 -N
+   ```
+2. Trong code Python / file `.env` dưới máy local:
+   ```python
+   MONGO_URI = "mongodb://localhost:27017/music_streaming"
+   ```
+   Toàn bộ truy vấn đọc/ghi sẽ được chuyển tiếp an toàn lên cơ sở dữ liệu trên Oracle Cloud!
 
 2. **Lỗi Spotify API `Invalid client secret`:**
    - Kiểm tra `SPOTIFY_CLIENT_ID` và `SPOTIFY_CLIENT_SECRET` trong `config/.env` hoặc nạp trực tiếp qua tab **Spotify Apps Pool** trên giao diện Cài đặt.
 
 3. **Không kết nối được MongoDB:**
    - Đảm bảo MongoDB đang chạy ở `localhost:27017` hoặc cập nhật `MONGO_URI` trong file `config/.env`.
+
+---
+
+> **Bản quyền & Phạm vi:** Dự án phục vụ Đồ án Tốt nghiệp Đại học — Hệ Thống Nghe Nhạc Trực Tuyến. Chỉ sử dụng trong phạm vi học tập và nghiên cứu.
 

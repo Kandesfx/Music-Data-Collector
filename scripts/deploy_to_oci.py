@@ -10,7 +10,7 @@ from pathlib import Path
 
 SSH_EXE = r"C:\Windows\System32\OpenSSH\ssh.exe"
 KEY_PATH = os.path.expanduser(r"~/.ssh/oci_key.pem")
-HOST = "158.178.247.33"
+HOSTS = ["158.178.247.33", "100.123.220.49"]
 USER = "ubuntu"
 
 if sys.platform == "win32":
@@ -21,25 +21,35 @@ if sys.platform == "win32":
         pass
 
 def run_ssh_command(cmd_str: str, timeout: int = 180):
-    print(f"\n🚀 [OCI SSH] Executing: {cmd_str[:80]}...")
-    full_cmd = [
-        SSH_EXE,
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "ConnectTimeout=10",
-        "-i", KEY_PATH,
-        f"{USER}@{HOST}",
-        cmd_str
-    ]
-    p = subprocess.Popen(full_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
-    output_lines = []
-    for line in p.stdout:
-        print(line, end="")
-        output_lines.append(line)
-    p.wait(timeout=timeout)
-    if p.returncode != 0:
-        print(f"❌ Command exited with code: {p.returncode}")
-        return False, "".join(output_lines)
-    return True, "".join(output_lines)
+    for host in HOSTS:
+        try:
+            print(f"\n🚀 [OCI SSH ({host})] Executing: {cmd_str[:80]}...")
+            full_cmd = [
+                SSH_EXE,
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "ConnectTimeout=5",
+                "-i", KEY_PATH,
+                f"{USER}@{host}",
+                cmd_str
+            ]
+            p = subprocess.Popen(full_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+            output_lines = []
+            for line in p.stdout:
+                print(line, end="")
+                output_lines.append(line)
+            p.wait(timeout=timeout)
+            if p.returncode == 0:
+                return True, "".join(output_lines)
+            elif "Connection timed out" in "".join(output_lines) or "timed out" in "".join(output_lines):
+                print(f"⚠️ Host {host} timed out, trying fallback...")
+                continue
+            else:
+                print(f"❌ Command exited with code: {p.returncode}")
+                return False, "".join(output_lines)
+        except Exception as e:
+            print(f"⚠️ Error with host {host}: {e}")
+            continue
+    return False, "All SSH hosts failed."
 
 def main():
     print("==========================================================")
